@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { AdminSidebar } from "@/components/layout/AdminSidebar";
+import { Footer } from "@/components/ui/Footer";
 
 // Resource-based auth check, per Clerk's current guidance — this layout
 // protects every page under /admin itself, rather than relying on
@@ -20,8 +21,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="flex h-screen overflow-hidden bg-bg">
       <AdminSidebar />
-      <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-7xl px-8 py-8">{children}</div>
+      <main className="flex flex-1 flex-col overflow-y-auto pt-14 lg:pt-0">
+        <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-8 sm:py-8">{children}</div>
+        <Footer />
       </main>
     </div>
   );
