@@ -141,9 +141,12 @@ export default async function ExamDetailPage({ params }: { params: Promise<{ exa
           <div className="rounded-lg border border-border bg-surface p-5">
             <h3 className="text-sm font-semibold text-ink">Eligible students</h3>
             <p className="mt-1 text-xs text-ink-muted">Manage which students can be assessed for this exam.</p>
-            <button className="mt-3 w-full rounded-md border border-border py-2 text-sm font-medium text-ink hover:bg-bg">
+            <Link
+              href={`/admin/exams/${exam.id}/eligibility`}
+              className="mt-3 block w-full rounded-md border border-border py-2 text-center text-sm font-medium text-ink hover:bg-bg"
+            >
               Manage eligibility
-            </button>
+            </Link>
           </div>
         </div>
       </div>

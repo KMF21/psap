@@ -164,6 +164,71 @@ export async function addSkillToExam(
   return { error: null };
 }
 
+// ---------------- Eligibility management ----------------
+
+export interface StudentEligibilityRow {
+  id: string;
+  registrationNumber: string;
+  fullName: string;
+  level: string;
+  isEligible: boolean;
+}
+
+export async function getStudentsWithEligibility(
+  supabase: SupabaseClient,
+  examId: string,
+): Promise<{ students: StudentEligibilityRow[]; error: string | null }> {
+  const { data: allStudents, error: studentsError } = await supabase
+    .from("students")
+    .select("id, registration_number, full_name, level")
+    .order("full_name", { ascending: true });
+
+  if (studentsError) return { students: [], error: studentsError.message };
+
+  const { data: eligibleRows, error: eligibilityError } = await supabase
+    .from("exam_eligibility")
+    .select("student_id")
+    .eq("exam_id", examId);
+
+  if (eligibilityError) return { students: [], error: eligibilityError.message };
+
+  const eligibleIds = new Set((eligibleRows ?? []).map((r) => r.student_id));
+
+  const students: StudentEligibilityRow[] = (allStudents ?? []).map((s) => ({
+    id: s.id,
+    registrationNumber: s.registration_number,
+    fullName: s.full_name,
+    level: s.level ?? "",
+    isEligible: eligibleIds.has(s.id),
+  }));
+
+  return { students, error: null };
+}
+
+/**
+ * Replaces the exam's eligibility list wholesale with the given student ids
+ * — simple and correct for a bulk "set who's eligible" action. Safe to do
+ * as delete-then-insert: nothing else in the schema has a foreign key
+ * pointing at exam_eligibility rows themselves, so there's no risk of
+ * losing dependent data by clearing and re-adding.
+ */
+export async function updateExamEligibility(
+  supabase: SupabaseClient,
+  examId: string,
+  studentIds: string[],
+): Promise<{ error: string | null }> {
+  const { error: deleteError } = await supabase.from("exam_eligibility").delete().eq("exam_id", examId);
+  if (deleteError) return { error: deleteError.message };
+
+  if (studentIds.length === 0) return { error: null };
+
+  const { error: insertError } = await supabase
+    .from("exam_eligibility")
+    .insert(studentIds.map((studentId) => ({ exam_id: examId, student_id: studentId })));
+
+  return { error: insertError?.message ?? null };
+}
+
 // Supabase returns a to-one embedded relation (via a FK on the querying
 // table, e.g. exams.course_id → courses.id) as a single object, and a
 // to-many relation (e.g. exam_skills rows belonging to one exam) as an
