@@ -16,11 +16,15 @@ export async function createStudentAction(
     return { error: "Registration number and full name are required." };
   }
 
-  const supabase = await createServerSupabaseClient();
-  const { error } = await createStudent(supabase, { registrationNumber, fullName, level });
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { error } = await createStudent(supabase, { registrationNumber, fullName, level });
 
-  if (error) {
-    return { error };
+    if (error) {
+      return { error };
+    }
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Unknown error connecting to the database." };
   }
 
   redirect("/admin/students");

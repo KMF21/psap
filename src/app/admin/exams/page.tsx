@@ -1,10 +1,23 @@
-import { ClipboardList, Plus } from "lucide-react";
+import { ClipboardList, Plus, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatusPill } from "@/components/ui/StatusPill";
-import { exams, courses, examSkills } from "@/lib/mock-data";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getExams } from "@/lib/supabase/exams";
 
-export default function ExamsPage() {
+export default async function ExamsPage() {
+  let exams: Awaited<ReturnType<typeof getExams>>["exams"] = [];
+  let error: string | null = null;
+
+  try {
+    const supabase = await createServerSupabaseClient();
+    const result = await getExams(supabase);
+    exams = result.exams;
+    error = result.error;
+  } catch (e) {
+    error = e instanceof Error ? e.message : "Unknown error connecting to the database.";
+  }
+
   return (
     <div>
       <PageHeader
@@ -22,11 +35,24 @@ export default function ExamsPage() {
         }
       />
 
-      <div className="space-y-4">
-        {exams.map((exam) => {
-          const course = courses.find((c) => c.id === exam.courseId);
-          const skillCount = examSkills.filter((es) => es.examId === exam.id).length;
-          return (
+      {error ? (
+        <div
+          className="flex items-start gap-3 rounded-lg border p-5 text-sm"
+          style={{ borderColor: "var(--warn)", background: "var(--warn-soft)", color: "var(--warn)" }}
+        >
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">Couldn&apos;t load examinations from the database.</p>
+            <p className="mt-1 opacity-90">{error}</p>
+          </div>
+        </div>
+      ) : exams.length === 0 ? (
+        <div className="rounded-lg border border-border bg-surface p-10 text-center text-sm text-ink-faint">
+          No examinations configured yet.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {exams.map((exam) => (
             <Link
               key={exam.id}
               href={`/admin/exams/${exam.id}`}
@@ -36,7 +62,7 @@ export default function ExamsPage() {
                 <div>
                   <p className="text-sm font-semibold text-ink">{exam.title}</p>
                   <p className="mt-1 text-xs text-ink-muted">
-                    {course?.code} · {exam.academicSession} · {skillCount} skill{skillCount !== 1 ? "s" : ""} configured
+                    {exam.courseCode} · {exam.academicSession} · {exam.skillCount} skill{exam.skillCount !== 1 ? "s" : ""} configured
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
@@ -50,9 +76,9 @@ export default function ExamsPage() {
                 </div>
               </div>
             </Link>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

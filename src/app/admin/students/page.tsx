@@ -6,8 +6,17 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getStudents } from "@/lib/supabase/students";
 
 export default async function StudentsPage() {
-  const supabase = await createServerSupabaseClient();
-  const { students, error } = await getStudents(supabase);
+  let students: Awaited<ReturnType<typeof getStudents>>["students"] = [];
+  let error: string | null = null;
+
+  try {
+    const supabase = await createServerSupabaseClient();
+    const result = await getStudents(supabase);
+    students = result.students;
+    error = result.error;
+  } catch (e) {
+    error = e instanceof Error ? e.message : "Unknown error connecting to the database.";
+  }
 
   return (
     <div>

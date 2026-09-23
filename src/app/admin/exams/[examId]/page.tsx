@@ -1,16 +1,49 @@
-import { ClipboardList, Plus } from "lucide-react";
+import { ClipboardList, Plus, AlertTriangle } from "lucide-react";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { exams, courses, examSkills, skills, csas } from "@/lib/mock-data";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getExamDetail } from "@/lib/supabase/exams";
 
 export default async function ExamDetailPage({ params }: { params: Promise<{ examId: string }> }) {
   const { examId } = await params;
-  const exam = exams.find((e) => e.id === examId);
+
+  let exam: Awaited<ReturnType<typeof getExamDetail>>["exam"] = null;
+  let error: string | null = null;
+
+  try {
+    const supabase = await createServerSupabaseClient();
+    const result = await getExamDetail(supabase, examId);
+    exam = result.exam;
+    error = result.error;
+  } catch (e) {
+    error = e instanceof Error ? e.message : "Unknown error connecting to the database.";
+  }
+
+  if (error) {
+    return (
+      <div>
+        <PageHeader
+          icon={ClipboardList}
+          title="Examination"
+          breadcrumb={[{ label: "Dashboard", href: "/admin" }, { label: "Examinations", href: "/admin/exams" }]}
+        />
+        <div
+          className="flex items-start gap-3 rounded-lg border p-5 text-sm"
+          style={{ borderColor: "var(--warn)", background: "var(--warn-soft)", color: "var(--warn)" }}
+        >
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">Couldn&apos;t load this examination from the database.</p>
+            <p className="mt-1 opacity-90">{error}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!exam) notFound();
 
-  const course = courses.find((c) => c.id === exam.courseId);
-  const assignedSkills = examSkills.filter((es) => es.examId === exam.id);
-  const totalAssigned = assignedSkills.reduce((sum, es) => sum + es.assignedMarks, 0);
+  const totalAssigned = exam.skills.reduce((sum, es) => sum + es.assignedMarks, 0);
   const isBalanced = totalAssigned === exam.practicalTargetTotal;
 
   return (
@@ -18,7 +51,7 @@ export default async function ExamDetailPage({ params }: { params: Promise<{ exa
       <PageHeader
         icon={ClipboardList}
         title={exam.title}
-        subtitle={`${course?.code} · ${exam.academicSession}`}
+        subtitle={`${exam.courseCode} · ${exam.academicSession}`}
         breadcrumb={[
           { label: "Dashboard", href: "/admin" },
           { label: "Examinations", href: "/admin/exams" },
@@ -35,7 +68,7 @@ export default async function ExamDetailPage({ params }: { params: Promise<{ exa
                 Assigned {totalAssigned} of {exam.practicalTargetTotal} target practical marks
                 {!isBalanced && (
                   <span className="ml-1.5 font-medium" style={{ color: "var(--warn)" }}>
-                    — doesn't sum to target yet
+                    — doesn&apos;t sum to target yet
                   </span>
                 )}
               </p>
@@ -44,26 +77,28 @@ export default async function ExamDetailPage({ params }: { params: Promise<{ exa
               <Plus size={13} /> Add skill
             </button>
           </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-ink-faint">
-                <th className="px-5 py-2.5 font-medium">Skill</th>
-                <th className="px-5 py-2.5 font-medium">Assigned marks</th>
-                <th className="px-5 py-2.5 font-medium">Native total</th>
-                <th className="px-5 py-2.5 font-medium">CSA</th>
-                <th className="px-5 py-2.5 font-medium">Compulsory</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assignedSkills.map((es) => {
-                const skill = skills.find((s) => s.id === es.skillId);
-                const assignedCsas = csas.filter((c) => es.assignedCsaIds.includes(c.id));
-                return (
+          {exam.skills.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-ink-faint">No skills assigned to this examination yet.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-ink-faint">
+                  <th className="px-5 py-2.5 font-medium">Skill</th>
+                  <th className="px-5 py-2.5 font-medium">Assigned marks</th>
+                  <th className="px-5 py-2.5 font-medium">Native total</th>
+                  <th className="px-5 py-2.5 font-medium">CSA</th>
+                  <th className="px-5 py-2.5 font-medium">Compulsory</th>
+                </tr>
+              </thead>
+              <tbody>
+                {exam.skills.map((es) => (
                   <tr key={es.id} className="border-b border-border last:border-0">
-                    <td className="px-5 py-3 text-ink">{skill?.name}</td>
+                    <td className="px-5 py-3 text-ink">{es.skillName}</td>
                     <td className="px-5 py-3 font-semibold tabular text-ink">{es.assignedMarks}</td>
-                    <td className="px-5 py-3 tabular text-ink-faint">/ {skill?.nativeTotal}</td>
-                    <td className="px-5 py-3 text-ink-muted">{assignedCsas.map((c) => c.fullName).join(", ")}</td>
+                    <td className="px-5 py-3 tabular text-ink-faint">/ {es.skillNativeTotal}</td>
+                    <td className="px-5 py-3 text-ink-muted">
+                      {es.assignedCsaNames.length > 0 ? es.assignedCsaNames.join(", ") : "—"}
+                    </td>
                     <td className="px-5 py-3">
                       {es.isCompulsory && (
                         <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: "var(--accent-soft)", color: "var(--accent-ink)" }}>
@@ -72,10 +107,10 @@ export default async function ExamDetailPage({ params }: { params: Promise<{ exa
                       )}
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
 
         <div className="space-y-4">
