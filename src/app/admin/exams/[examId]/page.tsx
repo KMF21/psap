@@ -1,4 +1,5 @@
 import { ClipboardList, Plus, AlertTriangle } from "lucide-react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -73,9 +74,12 @@ export default async function ExamDetailPage({ params }: { params: Promise<{ exa
                 )}
               </p>
             </div>
-            <button className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-ink hover:bg-bg">
+            <Link
+              href={`/admin/exams/${exam.id}/add-skill`}
+              className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-ink hover:bg-bg"
+            >
               <Plus size={13} /> Add skill
-            </button>
+            </Link>
           </div>
           {exam.skills.length === 0 ? (
             <p className="px-5 py-8 text-center text-sm text-ink-faint">No skills assigned to this examination yet.</p>

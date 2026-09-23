@@ -31,6 +31,139 @@ export interface ExamDetail {
   skills: ExamDetailSkillRow[];
 }
 
+// ---------------- Reference data + creation helpers ----------------
+
+export interface CourseOption {
+  id: string;
+  code: string;
+  title: string;
+}
+
+export interface SessionOption {
+  id: string;
+  label: string;
+}
+
+export interface SkillOption {
+  id: string;
+  name: string;
+  nativeTotal: number;
+}
+
+export interface CsaOption {
+  id: string;
+  fullName: string;
+}
+
+export async function getCourseOptions(supabase: SupabaseClient): Promise<CourseOption[]> {
+  const { data } = await supabase.from("courses").select("id, code, title").order("code");
+  return (data ?? []).map((r) => ({ id: r.id, code: r.code, title: r.title }));
+}
+
+export async function getSessionOptions(supabase: SupabaseClient): Promise<SessionOption[]> {
+  const { data } = await supabase.from("academic_sessions").select("id, label").order("label", { ascending: false });
+  return (data ?? []).map((r) => ({ id: r.id, label: r.label }));
+}
+
+export async function getSkillOptions(supabase: SupabaseClient): Promise<SkillOption[]> {
+  const { data } = await supabase.from("skills").select("id, name, native_total").order("name");
+  return (data ?? []).map((r) => ({ id: r.id, name: r.name, nativeTotal: r.native_total }));
+}
+
+export async function getCsaOptions(supabase: SupabaseClient): Promise<CsaOption[]> {
+  const { data } = await supabase.from("users").select("id, full_name").eq("role", "csa").eq("is_active", true).order("full_name");
+  return (data ?? []).map((r) => ({ id: r.id, fullName: r.full_name }));
+}
+
+/** Finds a course by code, or creates it — used when the exam form's inline "new course" fields are filled in. */
+export async function findOrCreateCourse(
+  supabase: SupabaseClient,
+  code: string,
+  title: string,
+): Promise<{ id: string | null; error: string | null }> {
+  const { data: existing } = await supabase.from("courses").select("id").eq("code", code).maybeSingle();
+  if (existing) return { id: existing.id, error: null };
+
+  const { data: created, error } = await supabase.from("courses").insert({ code, title }).select("id").single();
+  if (error || !created) return { id: null, error: error?.message ?? "Failed to create course." };
+  return { id: created.id, error: null };
+}
+
+/** Finds an academic session by label, or creates it. */
+export async function findOrCreateSession(
+  supabase: SupabaseClient,
+  label: string,
+): Promise<{ id: string | null; error: string | null }> {
+  const { data: existing } = await supabase.from("academic_sessions").select("id").eq("label", label).maybeSingle();
+  if (existing) return { id: existing.id, error: null };
+
+  const { data: created, error } = await supabase.from("academic_sessions").insert({ label }).select("id").single();
+  if (error || !created) return { id: null, error: error?.message ?? "Failed to create academic session." };
+  return { id: created.id, error: null };
+}
+
+export async function createExam(
+  supabase: SupabaseClient,
+  input: {
+    courseId: string;
+    academicSessionId: string;
+    title: string;
+    examType: "practical_only" | "practical_and_project";
+    practicalTargetTotal: number;
+    projectMaxTotal: number;
+  },
+): Promise<{ examId: string | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from("exams")
+    .insert({
+      course_id: input.courseId,
+      academic_session_id: input.academicSessionId,
+      title: input.title,
+      exam_type: input.examType,
+      practical_target_total: input.practicalTargetTotal,
+      project_max_total: input.projectMaxTotal,
+      status: "draft",
+    })
+    .select("id")
+    .single();
+
+  if (error || !data) return { examId: null, error: error?.message ?? "Failed to create exam." };
+  return { examId: data.id, error: null };
+}
+
+export async function addSkillToExam(
+  supabase: SupabaseClient,
+  input: { examId: string; skillId: string; assignedMarks: number; isCompulsory: boolean; csaIds: string[] },
+): Promise<{ error: string | null }> {
+  const { data: examSkill, error: esError } = await supabase
+    .from("exam_skills")
+    .insert({
+      exam_id: input.examId,
+      skill_id: input.skillId,
+      assigned_marks: input.assignedMarks,
+      is_compulsory: input.isCompulsory,
+    })
+    .select("id")
+    .single();
+
+  if (esError || !examSkill) {
+    if (esError?.code === "23505") {
+      return { error: "This skill is already assigned to this exam." };
+    }
+    return { error: esError?.message ?? "Failed to add skill to exam." };
+  }
+
+  if (input.csaIds.length > 0) {
+    const { error: csaError } = await supabase
+      .from("exam_skill_csa_assignments")
+      .insert(input.csaIds.map((csaId) => ({ exam_skill_id: examSkill.id, csa_id: csaId })));
+
+    if (csaError) return { error: csaError.message };
+  }
+
+  return { error: null };
+}
+
 // Supabase returns a to-one embedded relation (via a FK on the querying
 // table, e.g. exams.course_id → courses.id) as a single object, and a
 // to-many relation (e.g. exam_skills rows belonging to one exam) as an

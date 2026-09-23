@@ -26,12 +26,13 @@ export default async function ExamsPage() {
         subtitle="Configure exam structures, skill mark allocation, and CSA assignments"
         breadcrumb={[{ label: "Dashboard", href: "/admin" }, { label: "Examinations" }]}
         action={
-          <button
+          <Link
+            href="/admin/exams/new"
             className="flex items-center gap-1.5 rounded-md px-3.5 py-2 text-sm font-medium text-white"
             style={{ background: "var(--accent)" }}
           >
             <Plus size={15} /> Create examination
-          </button>
+          </Link>
         }
       />
 

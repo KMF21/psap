@@ -1,68 +1,65 @@
-import { FileBarChart } from "lucide-react";
+import { FileBarChart, AlertTriangle } from "lucide-react";
+import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Toolbar } from "@/components/ui/Toolbar";
-import { students, exams, examSkills, skills, skillAssessments } from "@/lib/mock-data";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { getExams } from "@/lib/supabase/exams";
 
-export default function ResultsPage() {
-  const exam = exams.find((e) => e.id === "ex-ngc300")!;
-  const examSkillsForExam = examSkills.filter((es) => es.examId === exam.id);
+export default async function ResultsIndexPage() {
+  let exams: Awaited<ReturnType<typeof getExams>>["exams"] = [];
+  let error: string | null = null;
 
-  const rows = students.map((student) => {
-    const skillScores = examSkillsForExam.map((es) => {
-      const assessment = skillAssessments.find((a) => a.examSkillId === es.id && a.studentId === student.id);
-      return { es, score: assessment?.scaledScore ?? null };
-    });
-    const practicalTotal = skillScores.reduce((sum, s) => sum + (s.score ?? 0), 0);
-    return { student, skillScores, practicalTotal };
-  });
+  try {
+    const supabase = await createServerSupabaseClient();
+    const result = await getExams(supabase);
+    exams = result.exams;
+    error = result.error;
+  } catch (e) {
+    error = e instanceof Error ? e.message : "Unknown error connecting to the database.";
+  }
 
   return (
     <div>
       <PageHeader
         icon={FileBarChart}
         title="Results"
-        subtitle={exam.title}
+        subtitle="Select an examination to view its combined result breakdown"
         breadcrumb={[{ label: "Dashboard", href: "/admin" }, { label: "Results" }]}
       />
 
-      <div className="rounded-lg border border-border bg-surface">
-        <Toolbar searchPlaceholder="Search by name or reg. number…" showExport />
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border text-left text-ink-faint">
-              <th className="px-5 py-3 font-medium">Student</th>
-              {examSkillsForExam.map((es) => {
-                const skill = skills.find((s) => s.id === es.skillId);
-                return (
-                  <th key={es.id} className="px-4 py-3 text-right font-medium">
-                    {skill?.name.split(" ").slice(0, 2).join(" ")}
-                    <div className="font-normal text-ink-faint">/ {es.assignedMarks}</div>
-                  </th>
-                );
-              })}
-              <th className="px-5 py-3 text-right font-medium">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(({ student, skillScores, practicalTotal }) => (
-              <tr key={student.id} className="border-b border-border last:border-0">
-                <td className="px-5 py-3.5">
-                  <p className="font-medium text-ink">{student.fullName}</p>
-                  <p className="text-xs tabular text-ink-faint">{student.registrationNumber}</p>
-                </td>
-                {skillScores.map(({ es, score }) => (
-                  <td key={es.id} className="px-4 py-3.5 text-right tabular text-ink-muted">
-                    {score ?? "—"}
-                  </td>
-                ))}
-                <td className="px-5 py-3.5 text-right font-semibold tabular text-ink">
-                  {practicalTotal} / {exam.practicalTargetTotal}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {error ? (
+        <div
+          className="flex items-start gap-3 rounded-lg border p-5 text-sm"
+          style={{ borderColor: "var(--warn)", background: "var(--warn-soft)", color: "var(--warn)" }}
+        >
+          <AlertTriangle size={18} className="mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium">Couldn&apos;t load examinations.</p>
+            <p className="mt-1 opacity-90">{error}</p>
+          </div>
+        </div>
+      ) : exams.length === 0 ? (
+        <div className="rounded-lg border border-border bg-surface p-10 text-center text-sm text-ink-faint">
+          No examinations configured yet.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {exams.map((exam) => (
+            <Link
+              key={exam.id}
+              href={`/admin/results/${exam.id}`}
+              className="flex items-center justify-between rounded-lg border border-border bg-surface p-5 hover:border-accent"
+            >
+              <div>
+                <p className="text-sm font-semibold text-ink">{exam.title}</p>
+                <p className="mt-1 text-xs text-ink-muted">
+                  {exam.courseCode} · {exam.academicSession} · {exam.skillCount} skill{exam.skillCount !== 1 ? "s" : ""}
+                </p>
+              </div>
+              <p className="text-sm font-medium tabular text-accent-ink">View results →</p>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

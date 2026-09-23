@@ -43,6 +43,22 @@ export function isPendingRubric(skill: Skill): boolean {
   return skill.steps.length === 1 && /pending/i.test(skill.steps[0].description);
 }
 
+export async function createSkillWithSteps(
+  supabase: SupabaseClient,
+  input: { name: string; timeAllowedMinutes: number; steps: { description: string; maxMarks: number }[] },
+): Promise<{ skillId: string | null; error: string | null }> {
+  const { data, error } = await supabase.rpc("create_skill_with_steps", {
+    p_name: input.name,
+    p_time_allowed_minutes: input.timeAllowedMinutes,
+    p_steps: input.steps.map((s) => ({ description: s.description, maxMarks: s.maxMarks })),
+  });
+
+  if (error) {
+    return { skillId: null, error: error.message };
+  }
+  return { skillId: data as string, error: null };
+}
+
 export async function getSkills(supabase: SupabaseClient): Promise<{ skills: Skill[]; error: string | null }> {
   const { data, error } = await supabase
     .from("skills")
