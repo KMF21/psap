@@ -27,9 +27,12 @@ export default async function StudentsPage() {
         breadcrumb={[{ label: "Dashboard", href: "/admin" }, { label: "Students" }]}
         action={
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-1.5 rounded-md border border-border px-3.5 py-2 text-sm font-medium text-ink hover:bg-surface">
+            <Link
+              href="/admin/students/import"
+              className="flex items-center gap-1.5 rounded-md border border-border px-3.5 py-2 text-sm font-medium text-ink hover:bg-surface"
+            >
               <Upload size={15} /> Bulk import
-            </button>
+            </Link>
             <Link
               href="/admin/students/new"
               className="flex items-center gap-1.5 rounded-md px-3.5 py-2 text-sm font-medium text-white"

@@ -1,7 +1,9 @@
-import { FileBarChart, AlertTriangle } from "lucide-react";
+import { FileBarChart, AlertTriangle, Pencil } from "lucide-react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Toolbar } from "@/components/ui/Toolbar";
+import { ExportButtons } from "./ExportButtons";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getResultsData } from "@/lib/supabase/results";
 
@@ -57,7 +59,7 @@ export default async function ExamResultsPage({ params }: { params: Promise<{ ex
       />
 
       <div className="rounded-lg border border-border bg-surface">
-        <Toolbar searchPlaceholder="Search by name or reg. number…" showExport />
+        <Toolbar searchPlaceholder="Search by name or reg. number…" rightSlot={<ExportButtons data={data} />} />
         {data.rows.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-ink-faint">No eligible students for this examination yet.</p>
         ) : (
@@ -96,7 +98,18 @@ export default async function ExamResultsPage({ params }: { params: Promise<{ ex
                   </td>
                   {row.skillScores.map((score, i) => (
                     <td key={data.skillColumns[i].examSkillId} className="px-4 py-3.5 text-right tabular text-ink-muted">
-                      {score ?? "—"}
+                      {score === null ? (
+                        "—"
+                      ) : (
+                        <Link
+                          href={`/admin/results/${examId}/edit/${data.skillColumns[i].examSkillId}/${row.studentId}`}
+                          className="group inline-flex items-center gap-1 hover:text-accent-ink"
+                          title="Correct this score"
+                        >
+                          {score}
+                          <Pencil size={11} className="opacity-0 group-hover:opacity-100" />
+                        </Link>
+                      )}
                     </td>
                   ))}
                   <td className="px-4 py-3.5 text-right font-semibold tabular text-ink">{row.practicalTotal}</td>

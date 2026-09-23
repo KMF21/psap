@@ -196,3 +196,167 @@ export async function getScoringPageData(
 
   return { examSkill, students, error: null };
 }
+
+// ---------------- Admin edit of a submitted assessment ----------------
+
+export interface AdminEditData {
+  examId: string;
+  examSkillId: string;
+  studentId: string;
+  studentName: string;
+  studentRegNumber: string;
+  skillName: string;
+  nativeTotal: number;
+  assignedMarks: number;
+  steps: ScoringStep[];
+  assessmentId: string | null; // null means no assessment exists yet — nothing to edit
+  currentStatus: "draft" | "submitted" | "amended" | null;
+  currentRawScore: number | null;
+  currentScaledScore: number | null;
+  submittedByCsaName: string | null;
+  stepScores: Record<string, number>;
+}
+
+export async function getAssessmentForEdit(
+  supabase: SupabaseClient,
+  examSkillId: string,
+  studentId: string,
+): Promise<{ data: AdminEditData | null; error: string | null }> {
+  const { data: esRow, error: esError } = await supabase
+    .from("exam_skills")
+    .select("id, exam_id, assigned_marks, skills(name, native_total, skill_steps(id, step_order, description, max_marks))")
+    .eq("id", examSkillId)
+    .maybeSingle();
+
+  if (esError) return { data: null, error: esError.message };
+  if (!esRow) return { data: null, error: null };
+
+  const row = esRow as unknown as ExamSkillDetailRow;
+  const steps: ScoringStep[] = [...(row.skills?.skill_steps ?? [])]
+    .sort((a, b) => a.step_order - b.step_order)
+    .map((s) => ({ id: s.id, description: s.description, maxMarks: s.max_marks }));
+
+  const { data: studentRow, error: studentError } = await supabase
+    .from("students")
+    .select("registration_number, full_name")
+    .eq("id", studentId)
+    .maybeSingle();
+
+  if (studentError) return { data: null, error: studentError.message };
+  if (!studentRow) return { data: null, error: null };
+
+  // Admin can see ANY CSA's assessment here (admin_all_skill_assessments is
+  // FOR ALL, unlike a CSA's own csa_id-scoped policy) — there should be at
+  // most one row per (exam_skill, student) under the spec's one-CSA-per-skill
+  // model, so take the first if more than one somehow exists.
+  const { data: assessmentRows, error: assessmentError } = await supabase
+    .from("skill_assessments")
+    .select("id, status, raw_score, scaled_score, csa_id, skill_assessment_step_scores(skill_step_id, score), users(full_name)")
+    .eq("exam_skill_id", examSkillId)
+    .eq("student_id", studentId)
+    .limit(1);
+
+  if (assessmentError) return { data: null, error: assessmentError.message };
+
+  const assessment = (assessmentRows ?? [])[0] as unknown as
+    | {
+        id: string;
+        status: "draft" | "submitted" | "amended";
+        raw_score: number | null;
+        scaled_score: number | null;
+        skill_assessment_step_scores: { skill_step_id: string; score: number }[];
+        users: { full_name: string } | null;
+      }
+    | undefined;
+
+  const stepScores: Record<string, number> = {};
+  for (const ss of assessment?.skill_assessment_step_scores ?? []) {
+    stepScores[ss.skill_step_id] = ss.score;
+  }
+
+  return {
+    data: {
+      examId: row.exam_id,
+      examSkillId: row.id,
+      studentId,
+      studentName: studentRow.full_name,
+      studentRegNumber: studentRow.registration_number,
+      skillName: row.skills?.name ?? "Unknown skill",
+      nativeTotal: row.skills?.native_total ?? 0,
+      assignedMarks: row.assigned_marks,
+      steps,
+      assessmentId: assessment?.id ?? null,
+      currentStatus: assessment?.status ?? null,
+      currentRawScore: assessment?.raw_score ?? null,
+      currentScaledScore: assessment?.scaled_score ?? null,
+      submittedByCsaName: assessment?.users?.full_name ?? null,
+      stepScores,
+    },
+    error: null,
+  };
+}
+
+export interface AdminEditResult {
+  error: string | null;
+}
+
+/**
+ * Unlike a CSA's own save path, this deliberately does NOT check
+ * status !== 'draft' first — Admin's RLS policy (admin_all_skill_assessments,
+ * FOR ALL) is intentionally unrestricted by status, which is exactly what
+ * lets an Admin correct an already-submitted, CSA-locked assessment. Every
+ * change here is logged with the before/after values so the correction
+ * itself is auditable even though it bypasses the normal lock.
+ */
+export async function adminUpdateAssessment(
+  supabase: SupabaseClient,
+  input: {
+    assessmentId: string;
+    examSkillId: string;
+    nativeTotal: number;
+    assignedMarks: number;
+    stepScores: Record<string, number>;
+    adminUserId: string;
+    previousRawScore: number | null;
+    previousScaledScore: number | null;
+    previousStatus: string | null;
+  },
+): Promise<AdminEditResult> {
+  const rawScore = Object.values(input.stepScores).reduce((sum, v) => sum + (Number(v) || 0), 0);
+  const scaledScore =
+    input.nativeTotal > 0 ? Math.round(((rawScore / input.nativeTotal) * input.assignedMarks) * 10) / 10 : 0;
+
+  const { error: updateError } = await supabase
+    .from("skill_assessments")
+    .update({ raw_score: rawScore, scaled_score: scaledScore, status: "amended" })
+    .eq("id", input.assessmentId);
+
+  if (updateError) return { error: updateError.message };
+
+  const { error: deleteError } = await supabase
+    .from("skill_assessment_step_scores")
+    .delete()
+    .eq("skill_assessment_id", input.assessmentId);
+
+  if (deleteError) return { error: deleteError.message };
+
+  const stepRows = Object.entries(input.stepScores)
+    .filter(([, score]) => score > 0)
+    .map(([skill_step_id, score]) => ({ skill_assessment_id: input.assessmentId, skill_step_id, score }));
+
+  if (stepRows.length > 0) {
+    const { error: stepInsertError } = await supabase.from("skill_assessment_step_scores").insert(stepRows);
+    if (stepInsertError) return { error: stepInsertError.message };
+  }
+
+  await supabase.from("audit_log").insert({
+    entity_type: "skill_assessment",
+    entity_id: input.assessmentId,
+    action: "admin_edit",
+    actor_id: input.adminUserId,
+    previous_value: { raw_score: input.previousRawScore, scaled_score: input.previousScaledScore, status: input.previousStatus },
+    new_value: { raw_score: rawScore, scaled_score: scaledScore, status: "amended" },
+  });
+
+  return { error: null };
+}

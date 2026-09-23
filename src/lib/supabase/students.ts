@@ -53,3 +53,47 @@ export async function createStudent(
   }
   return { error: null };
 }
+
+export interface BulkImportResult {
+  inserted: number;
+  skipped: number;
+  error: string | null;
+}
+
+/**
+ * Deliberately not a Postgres upsert with ignore-duplicates — that relies
+ * on subtle PostgREST return-shape behavior that's easy to get wrong.
+ * Checking existing registration numbers first, then inserting only the
+ * new ones, is simple to reason about and simple to test correctly.
+ */
+export async function bulkImportStudents(
+  supabase: SupabaseClient,
+  rows: { registrationNumber: string; fullName: string; level: string }[],
+): Promise<BulkImportResult> {
+  if (rows.length === 0) return { inserted: 0, skipped: 0, error: null };
+
+  const regNumbers = rows.map((r) => r.registrationNumber);
+  const { data: existing, error: lookupError } = await supabase
+    .from("students")
+    .select("registration_number")
+    .in("registration_number", regNumbers);
+
+  if (lookupError) return { inserted: 0, skipped: 0, error: lookupError.message };
+
+  const existingSet = new Set((existing ?? []).map((e) => e.registration_number));
+  const toInsert = rows.filter((r) => !existingSet.has(r.registrationNumber));
+  const skipped = rows.length - toInsert.length;
+
+  if (toInsert.length === 0) return { inserted: 0, skipped, error: null };
+
+  const { error: insertError } = await supabase.from("students").insert(
+    toInsert.map((r) => ({
+      registration_number: r.registrationNumber,
+      full_name: r.fullName,
+      level: r.level || null,
+    })),
+  );
+
+  if (insertError) return { inserted: 0, skipped, error: insertError.message };
+  return { inserted: toInsert.length, skipped, error: null };
+}
