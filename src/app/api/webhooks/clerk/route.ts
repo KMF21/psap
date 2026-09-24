@@ -48,11 +48,19 @@ export async function POST(req: Request) {
 
   let event: ClerkUserEvent;
   try {
-    event = webhook.verify(body, {
+    // svix's Webhook.verify() only validates the signature — it throws on
+    // a bad one but returns `undefined` on success, it does NOT hand back
+    // the parsed payload the way some other webhook libraries do. Treating
+    // its return value as the event (the original bug here) meant `event`
+    // was always undefined even when the signature check genuinely passed,
+    // and every request then crashed on `event.type` below. We verify,
+    // then separately parse the already-read body ourselves.
+    webhook.verify(body, {
       "svix-id": svixId,
       "svix-timestamp": svixTimestamp,
       "svix-signature": svixSignature,
-    }) as unknown as ClerkUserEvent;
+    });
+    event = JSON.parse(body) as ClerkUserEvent;
   } catch {
     return NextResponse.json({ error: "Invalid webhook signature" }, { status: 400 });
   }
