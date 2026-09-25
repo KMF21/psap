@@ -61,6 +61,181 @@ export async function getMyAssignments(
   return { assignments, error: null };
 }
 
+// ---------------- Dashboard: "my project assignments" ----------------
+
+export interface CsaProjectAssignment {
+  examId: string;
+  examTitle: string;
+  maxMarks: number;
+  totalEligible: number;
+  totalSubmitted: number;
+}
+
+type MyProjectAssignmentRow = {
+  exam_id: string;
+  max_marks: number;
+  exams: { title: string } | null;
+};
+
+/**
+ * Same RLS-does-the-filtering pattern as getMyAssignments above — a CSA
+ * querying exam_project_csa_assignments only ever sees their own rows
+ * (csa_read_own_project_csa in 001_init.sql).
+ */
+export async function getMyProjectAssignments(
+  supabase: SupabaseClient,
+): Promise<{ assignments: CsaProjectAssignment[]; error: string | null }> {
+  const { data: rows, error } = await supabase
+    .from("exam_project_csa_assignments")
+    .select("exam_id, max_marks, exams(title)");
+
+  if (error) {
+    return { assignments: [], error: error.message };
+  }
+
+  const assignments: CsaProjectAssignment[] = [];
+  for (const row of (rows ?? []) as unknown as MyProjectAssignmentRow[]) {
+    const [{ count: totalEligible }, { count: totalSubmitted }] = await Promise.all([
+      supabase.from("exam_eligibility").select("*", { count: "exact", head: true }).eq("exam_id", row.exam_id),
+      supabase
+        .from("project_assessments")
+        .select("*", { count: "exact", head: true })
+        .eq("exam_id", row.exam_id)
+        .eq("status", "submitted"),
+    ]);
+
+    assignments.push({
+      examId: row.exam_id,
+      examTitle: row.exams?.title ?? "Unknown exam",
+      maxMarks: row.max_marks,
+      totalEligible: totalEligible ?? 0,
+      totalSubmitted: totalSubmitted ?? 0,
+    });
+  }
+
+  return { assignments, error: null };
+}
+
+// ---------------- Project scoring page: students + existing scores ----------------
+
+export interface ProjectScoringStudent {
+  id: string;
+  registrationNumber: string;
+  fullName: string;
+  level: string;
+  status: AssessmentStatus;
+  score: number | null;
+}
+
+export interface ProjectScoringData {
+  examId: string;
+  examTitle: string;
+  maxMarks: number;
+}
+
+export async function getProjectScoringPageData(
+  supabase: SupabaseClient,
+  examId: string,
+): Promise<{ data: ProjectScoringData | null; students: ProjectScoringStudent[]; error: string | null }> {
+  const { data: assignmentRow, error: assignmentError } = await supabase
+    .from("exam_project_csa_assignments")
+    .select("max_marks, exams(id, title)")
+    .eq("exam_id", examId)
+    .maybeSingle();
+
+  if (assignmentError) return { data: null, students: [], error: assignmentError.message };
+  if (!assignmentRow) return { data: null, students: [], error: null }; // not assigned to this exam's project
+
+  const row = assignmentRow as unknown as { max_marks: number; exams: { id: string; title: string } | null };
+
+  const { data: studentRows, error: studentsError } = await supabase
+    .from("students")
+    .select("id, registration_number, full_name, level, exam_eligibility!inner(exam_id)")
+    .eq("exam_eligibility.exam_id", examId)
+    .order("full_name", { ascending: true });
+
+  if (studentsError) return { data: null, students: [], error: studentsError.message };
+
+  const { data: assessmentRows, error: assessmentsError } = await supabase
+    .from("project_assessments")
+    .select("student_id, score, status")
+    .eq("exam_id", examId);
+
+  if (assessmentsError) return { data: null, students: [], error: assessmentsError.message };
+
+  const assessmentByStudent = new Map<string, { score: number | null; status: AssessmentStatus }>();
+  for (const a of assessmentRows ?? []) {
+    assessmentByStudent.set(a.student_id, { score: a.score, status: a.status as AssessmentStatus });
+  }
+
+  const students: ProjectScoringStudent[] = (studentRows ?? []).map((s) => {
+    const assessment = assessmentByStudent.get(s.id);
+    return {
+      id: s.id,
+      registrationNumber: s.registration_number,
+      fullName: s.full_name,
+      level: s.level ?? "",
+      status: assessment?.status ?? "pending",
+      score: assessment?.score ?? null,
+    };
+  });
+
+  return {
+    data: { examId, examTitle: row.exams?.title ?? "Unknown exam", maxMarks: row.max_marks },
+    students,
+    error: null,
+  };
+}
+
+export interface SaveProjectAssessmentResult {
+  error: string | null;
+  status: "draft" | "submitted" | null;
+}
+
+export async function saveProjectAssessment(
+  supabase: SupabaseClient,
+  input: { examId: string; studentId: string; csaUserId: string; score: number; maxMarks: number; submit: boolean },
+): Promise<SaveProjectAssessmentResult> {
+  const { data: existing } = await supabase
+    .from("project_assessments")
+    .select("id, status")
+    .eq("exam_id", input.examId)
+    .eq("student_id", input.studentId)
+    .eq("csa_id", input.csaUserId)
+    .maybeSingle();
+
+  if (existing && existing.status !== "draft") {
+    return {
+      error: "This project score was already submitted and is locked. An Admin must correct it directly.",
+      status: existing.status as "submitted",
+    };
+  }
+
+  const clampedScore = Math.max(0, Math.min(input.score, input.maxMarks));
+  const newStatus = input.submit ? "submitted" : "draft";
+
+  if (existing) {
+    const { error } = await supabase
+      .from("project_assessments")
+      .update({ score: clampedScore, status: newStatus, submitted_at: input.submit ? new Date().toISOString() : null })
+      .eq("id", existing.id);
+    if (error) return { error: error.message, status: null };
+  } else {
+    const { error } = await supabase.from("project_assessments").insert({
+      exam_id: input.examId,
+      student_id: input.studentId,
+      csa_id: input.csaUserId,
+      score: clampedScore,
+      max_marks: input.maxMarks,
+      status: newStatus,
+      submitted_at: input.submit ? new Date().toISOString() : null,
+    });
+    if (error) return { error: error.message, status: null };
+  }
+
+  return { error: null, status: newStatus };
+}
+
 // ---------------- Scoring page: full skill + students + existing scores ----------------
 
 export interface ScoringStep {

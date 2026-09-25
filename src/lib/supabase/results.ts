@@ -10,6 +10,7 @@ export interface ResultsRow {
   studentId: string;
   registrationNumber: string;
   fullName: string;
+  level: string;
   skillScores: (number | null)[]; // aligned to skillColumns, by index
   practicalTotal: number;
   projectScores: number[]; // one per submitted project-assessing CSA
@@ -19,15 +20,16 @@ export interface ResultsRow {
 
 export interface ResultsData {
   examTitle: string;
+  academicSession: string;
   practicalTargetTotal: number;
   projectMaxTotal: number;
   skillColumns: ResultsSkillColumn[];
   rows: ResultsRow[];
 }
 
-type ExamRow = { title: string; practical_target_total: number; project_max_total: number };
+type ExamRow = { title: string; practical_target_total: number; project_max_total: number; academic_sessions: { label: string } | null };
 type ExamSkillRow = { id: string; assigned_marks: number; skills: { name: string } | null };
-type StudentRow = { id: string; registration_number: string; full_name: string };
+type StudentRow = { id: string; registration_number: string; full_name: string; level: string | null };
 type SkillAssessmentRow = { exam_skill_id: string; student_id: string; scaled_score: number | null; status: string };
 type ProjectAssessmentRow = { student_id: string; score: number | null; status: string };
 
@@ -37,7 +39,7 @@ export async function getResultsData(
 ): Promise<{ data: ResultsData | null; error: string | null }> {
   const { data: examRow, error: examError } = await supabase
     .from("exams")
-    .select("title, practical_target_total, project_max_total")
+    .select("title, practical_target_total, project_max_total, academic_sessions(label)")
     .eq("id", examId)
     .maybeSingle();
 
@@ -63,7 +65,7 @@ export async function getResultsData(
 
   const { data: studentRows, error: studentsError } = await supabase
     .from("students")
-    .select("id, registration_number, full_name, exam_eligibility!inner(exam_id)")
+    .select("id, registration_number, full_name, level, exam_eligibility!inner(exam_id)")
     .eq("exam_eligibility.exam_id", examId)
     .order("full_name", { ascending: true });
 
@@ -122,6 +124,7 @@ export async function getResultsData(
       studentId: student.id,
       registrationNumber: student.registration_number,
       fullName: student.full_name,
+      level: student.level ?? "",
       skillScores,
       practicalTotal,
       projectScores,
@@ -133,6 +136,7 @@ export async function getResultsData(
   return {
     data: {
       examTitle: exam.title,
+      academicSession: exam.academic_sessions?.label ?? "—",
       practicalTargetTotal: exam.practical_target_total,
       projectMaxTotal: exam.project_max_total,
       skillColumns,

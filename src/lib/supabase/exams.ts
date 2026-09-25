@@ -29,6 +29,7 @@ export interface ExamDetail {
   projectMaxTotal: number;
   status: "draft" | "open" | "closed";
   skills: ExamDetailSkillRow[];
+  projectCsaNames: string[];
 }
 
 // ---------------- Reference data + creation helpers ----------------
@@ -102,6 +103,15 @@ export async function findOrCreateSession(
   return { id: created.id, error: null };
 }
 
+export async function updateExamStatus(
+  supabase: SupabaseClient,
+  examId: string,
+  status: "draft" | "open" | "closed",
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.from("exams").update({ status }).eq("id", examId);
+  return { error: error?.message ?? null };
+}
+
 export async function createExam(
   supabase: SupabaseClient,
   input: {
@@ -129,6 +139,30 @@ export async function createExam(
 
   if (error || !data) return { examId: null, error: error?.message ?? "Failed to create exam." };
   return { examId: data.id, error: null };
+}
+
+/**
+ * Replaces the project's CSA assignment list wholesale — same "delete then
+ * insert" simplicity as updateExamEligibility, and safe for the same
+ * reason: nothing else has a foreign key into exam_project_csa_assignments
+ * rows themselves.
+ */
+export async function setProjectCsas(
+  supabase: SupabaseClient,
+  examId: string,
+  csaIds: string[],
+  maxMarksPerCsa: number,
+): Promise<{ error: string | null }> {
+  const { error: deleteError } = await supabase.from("exam_project_csa_assignments").delete().eq("exam_id", examId);
+  if (deleteError) return { error: deleteError.message };
+
+  if (csaIds.length === 0) return { error: null };
+
+  const { error: insertError } = await supabase
+    .from("exam_project_csa_assignments")
+    .insert(csaIds.map((csaId) => ({ exam_id: examId, csa_id: csaId, max_marks: maxMarksPerCsa })));
+
+  return { error: insertError?.message ?? null };
 }
 
 export async function addSkillToExam(
@@ -325,6 +359,15 @@ export async function getExamDetail(
     return { exam: null, error: skillsError.message };
   }
 
+  const { data: projectCsaRows, error: projectCsaError } = await supabase
+    .from("exam_project_csa_assignments")
+    .select("users(full_name)")
+    .eq("exam_id", examId);
+
+  if (projectCsaError) {
+    return { exam: null, error: projectCsaError.message };
+  }
+
   const row = examRow as unknown as ExamDetailRow;
   const skills: ExamDetailSkillRow[] = ((skillRows ?? []) as unknown as ExamSkillDetailRow[]).map((es) => ({
     id: es.id,
@@ -334,6 +377,10 @@ export async function getExamDetail(
     skillNativeTotal: es.skills?.native_total ?? 0,
     assignedCsaNames: es.exam_skill_csa_assignments.map((a) => a.users?.full_name).filter((n): n is string => Boolean(n)),
   }));
+
+  const projectCsaNames = ((projectCsaRows ?? []) as unknown as { users: { full_name: string } | null }[])
+    .map((r) => r.users?.full_name)
+    .filter((n): n is string => Boolean(n));
 
   return {
     exam: {
@@ -345,6 +392,7 @@ export async function getExamDetail(
       projectMaxTotal: row.project_max_total,
       status: row.status,
       skills,
+      projectCsaNames,
     },
     error: null,
   };

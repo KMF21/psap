@@ -34,6 +34,44 @@ export async function getStudents(supabase: SupabaseClient): Promise<{ students:
   return { students: (data ?? []).map(rowToStudent), error: null };
 }
 
+export async function getStudentById(
+  supabase: SupabaseClient,
+  studentId: string,
+): Promise<{ student: Student | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from("students")
+    .select("id, registration_number, full_name, level, photo_url")
+    .eq("id", studentId)
+    .maybeSingle();
+
+  if (error) return { student: null, error: error.message };
+  if (!data) return { student: null, error: null };
+  return { student: rowToStudent(data), error: null };
+}
+
+export async function updateStudent(
+  supabase: SupabaseClient,
+  studentId: string,
+  input: { registrationNumber: string; fullName: string; level: string },
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from("students")
+    .update({
+      registration_number: input.registrationNumber,
+      full_name: input.fullName,
+      level: input.level || null,
+    })
+    .eq("id", studentId);
+
+  if (error) {
+    if (error.code === "23505") {
+      return { error: `A student with registration number "${input.registrationNumber}" already exists.` };
+    }
+    return { error: error.message };
+  }
+  return { error: null };
+}
+
 export async function createStudent(
   supabase: SupabaseClient,
   input: { registrationNumber: string; fullName: string; level: string },

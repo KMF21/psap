@@ -86,7 +86,11 @@ export default async function StudentsPage() {
                     <td className="px-5 py-3.5 font-medium tabular text-ink">{s.registrationNumber}</td>
                     <td className="px-5 py-3.5 text-ink">{s.fullName}</td>
                     <td className="px-5 py-3.5 text-ink-muted">{s.level}</td>
-                    <td className="px-5 py-3.5 text-ink-faint">···</td>
+                    <td className="px-5 py-3.5 text-right">
+                      <Link href={`/admin/students/${s.id}/edit`} className="text-xs font-medium text-ink-muted hover:text-accent-ink">
+                        Edit
+                      </Link>
+                    </td>
                   </tr>
                 ))
               )}

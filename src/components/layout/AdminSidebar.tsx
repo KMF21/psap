@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { useUser, SignOutButton } from "@clerk/nextjs";
 import {
   LayoutDashboard, Users, ClipboardList, ListChecks, UserCog,
-  FileBarChart, Settings, LogOut, Menu, X,
+  FileBarChart, LogOut, Menu, X, History,
 } from "lucide-react";
 
 const groups = [
@@ -17,6 +17,7 @@ const groups = [
       { href: "/admin/exams", label: "Examinations", icon: ClipboardList },
       { href: "/admin/skills", label: "Skills & rubrics", icon: ListChecks },
       { href: "/admin/results", label: "Results", icon: FileBarChart },
+      { href: "/admin/audit-log", label: "Audit log", icon: History },
     ],
   },
   {
@@ -89,18 +90,6 @@ export function AdminSidebar() {
             </ul>
           </div>
         ))}
-
-        <div className="mb-5">
-          <p className="mb-1.5 px-2 text-xs font-medium text-ink-faint">System</p>
-          <Link
-            href="/admin/settings"
-            onClick={() => setMobileOpen(false)}
-            className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-ink-muted"
-          >
-            <Settings size={16} strokeWidth={2} />
-            Settings
-          </Link>
-        </div>
       </nav>
 
       <div className="flex items-center gap-2.5 border-t border-border px-4 py-4">

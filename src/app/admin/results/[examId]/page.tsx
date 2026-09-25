@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Toolbar } from "@/components/ui/Toolbar";
 import { ExportButtons } from "./ExportButtons";
+import { ResultSheetButton } from "./ResultSheetButton";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getResultsData } from "@/lib/supabase/results";
 
@@ -87,6 +88,7 @@ export default async function ExamResultsPage({ params }: { params: Promise<{ ex
                   Total
                   <div className="font-normal text-ink-faint">/ {grandTotalMax}</div>
                 </th>
+                <th className="w-10 px-3 py-3" />
               </tr>
             </thead>
             <tbody>
@@ -126,6 +128,9 @@ export default async function ExamResultsPage({ params }: { params: Promise<{ ex
                     </td>
                   )}
                   <td className="px-5 py-3.5 text-right font-semibold tabular text-ink">{row.grandTotal}</td>
+                  <td className="px-3 py-3.5 text-center">
+                    <ResultSheetButton data={data} row={row} />
+                  </td>
                 </tr>
               ))}
             </tbody>

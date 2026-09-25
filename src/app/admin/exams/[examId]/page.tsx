@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getExamDetail } from "@/lib/supabase/exams";
+import { ExamStatusSelect } from "./ExamStatusSelect";
 
 export default async function ExamDetailPage({ params }: { params: Promise<{ examId: string }> }) {
   const { examId } = await params;
@@ -58,6 +59,7 @@ export default async function ExamDetailPage({ params }: { params: Promise<{ exa
           { label: "Examinations", href: "/admin/exams" },
           { label: exam.title },
         ]}
+        action={<ExamStatusSelect examId={exam.id} initialStatus={exam.status} />}
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -137,6 +139,21 @@ export default async function ExamDetailPage({ params }: { params: Promise<{ exa
               </div>
             </dl>
           </div>
+
+          {exam.projectMaxTotal > 0 && (
+            <div className="rounded-lg border border-border bg-surface p-5">
+              <h3 className="text-sm font-semibold text-ink">Project assessors</h3>
+              <p className="mt-1 text-xs text-ink-muted">
+                {exam.projectCsaNames.length > 0 ? exam.projectCsaNames.join(", ") : "No CSAs assigned yet."}
+              </p>
+              <Link
+                href={`/admin/exams/${exam.id}/project-csas`}
+                className="mt-3 block w-full rounded-md border border-border py-2 text-center text-sm font-medium text-ink hover:bg-bg"
+              >
+                Assign project assessors
+              </Link>
+            </div>
+          )}
 
           <div className="rounded-lg border border-border bg-surface p-5">
             <h3 className="text-sm font-semibold text-ink">Eligible students</h3>
