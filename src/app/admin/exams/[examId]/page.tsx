@@ -86,6 +86,7 @@ export default async function ExamDetailPage({ params }: { params: Promise<{ exa
           {exam.skills.length === 0 ? (
             <p className="px-5 py-8 text-center text-sm text-ink-faint">No skills assigned to this examination yet.</p>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border text-left text-ink-faint">
@@ -94,16 +95,23 @@ export default async function ExamDetailPage({ params }: { params: Promise<{ exa
                   <th className="px-5 py-2.5 font-medium">Native total</th>
                   <th className="px-5 py-2.5 font-medium">CSA</th>
                   <th className="px-5 py-2.5 font-medium">Compulsory</th>
+                  <th className="px-5 py-2.5 font-medium" />
                 </tr>
               </thead>
               <tbody>
                 {exam.skills.map((es) => (
                   <tr key={es.id} className="border-b border-border last:border-0">
-                    <td className="px-5 py-3 text-ink">{es.skillName}</td>
+                    <td className="px-5 py-3 text-ink whitespace-nowrap">{es.skillName}</td>
                     <td className="px-5 py-3 font-semibold tabular text-ink">{es.assignedMarks}</td>
                     <td className="px-5 py-3 tabular text-ink-faint">/ {es.skillNativeTotal}</td>
-                    <td className="px-5 py-3 text-ink-muted">
-                      {es.assignedCsaNames.length > 0 ? es.assignedCsaNames.join(", ") : "—"}
+                    <td className="px-5 py-3 text-ink-muted whitespace-nowrap">
+                      {es.assignedCsaNames.length > 0 ? (
+                        es.assignedCsaNames.join(", ")
+                      ) : (
+                        <span className="rounded-full px-2 py-0.5 text-xs font-medium" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
+                          No CSA assigned
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3">
                       {es.isCompulsory && (
@@ -112,10 +120,19 @@ export default async function ExamDetailPage({ params }: { params: Promise<{ exa
                         </span>
                       )}
                     </td>
+                    <td className="px-5 py-3 text-right whitespace-nowrap">
+                      <Link
+                        href={`/admin/exams/${exam.id}/skills/${es.id}/edit`}
+                        className="text-xs font-medium text-ink-muted hover:text-accent-ink"
+                      >
+                        Edit
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
 

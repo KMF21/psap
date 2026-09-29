@@ -64,6 +64,7 @@ export default async function ExamResultsPage({ params }: { params: Promise<{ ex
         {data.rows.length === 0 ? (
           <p className="px-5 py-10 text-center text-sm text-ink-faint">No eligible students for this examination yet.</p>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-ink-faint">
@@ -105,11 +106,11 @@ export default async function ExamResultsPage({ params }: { params: Promise<{ ex
                       ) : (
                         <Link
                           href={`/admin/results/${examId}/edit/${data.skillColumns[i].examSkillId}/${row.studentId}`}
-                          className="group inline-flex items-center gap-1 hover:text-accent-ink"
+                          className="inline-flex items-center gap-1 underline decoration-dotted underline-offset-2 hover:text-accent-ink hover:decoration-solid"
                           title="Correct this score"
                         >
                           {score}
-                          <Pencil size={11} className="opacity-0 group-hover:opacity-100" />
+                          <Pencil size={11} className="text-ink-faint" />
                         </Link>
                       )}
                     </td>
@@ -135,6 +136,7 @@ export default async function ExamResultsPage({ params }: { params: Promise<{ ex
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

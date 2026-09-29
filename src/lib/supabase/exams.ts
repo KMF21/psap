@@ -165,6 +165,91 @@ export async function setProjectCsas(
   return { error: insertError?.message ?? null };
 }
 
+export interface ExamSkillForEdit {
+  examSkillId: string;
+  examId: string;
+  skillName: string;
+  assignedMarks: number;
+  isCompulsory: boolean;
+  currentCsaIds: string[];
+}
+
+export async function getExamSkillForEdit(
+  supabase: SupabaseClient,
+  examSkillId: string,
+): Promise<{ data: ExamSkillForEdit | null; error: string | null }> {
+  const { data: esRow, error: esError } = await supabase
+    .from("exam_skills")
+    .select("id, exam_id, assigned_marks, is_compulsory, skills(name)")
+    .eq("id", examSkillId)
+    .maybeSingle();
+
+  if (esError) return { data: null, error: esError.message };
+  if (!esRow) return { data: null, error: null };
+
+  const row = esRow as unknown as {
+    id: string;
+    exam_id: string;
+    assigned_marks: number;
+    is_compulsory: boolean;
+    skills: { name: string } | null;
+  };
+
+  const { data: csaRows, error: csaError } = await supabase
+    .from("exam_skill_csa_assignments")
+    .select("csa_id")
+    .eq("exam_skill_id", examSkillId);
+
+  if (csaError) return { data: null, error: csaError.message };
+
+  return {
+    data: {
+      examSkillId: row.id,
+      examId: row.exam_id,
+      skillName: row.skills?.name ?? "Unknown skill",
+      assignedMarks: row.assigned_marks,
+      isCompulsory: row.is_compulsory,
+      currentCsaIds: (csaRows ?? []).map((r) => r.csa_id),
+    },
+    error: null,
+  };
+}
+
+/**
+ * Updates an already-added exam skill's marks/compulsory flag, and
+ * replaces its CSA assignment list wholesale — same delete-then-insert
+ * pattern as updateExamEligibility and setProjectCsas, safe for the same
+ * reason (nothing references exam_skill_csa_assignments rows themselves).
+ */
+export async function updateExamSkillAssignment(
+  supabase: SupabaseClient,
+  examSkillId: string,
+  input: { assignedMarks: number; isCompulsory: boolean; csaIds: string[] },
+): Promise<{ error: string | null }> {
+  const { error: updateError } = await supabase
+    .from("exam_skills")
+    .update({ assigned_marks: input.assignedMarks, is_compulsory: input.isCompulsory })
+    .eq("id", examSkillId);
+
+  if (updateError) return { error: updateError.message };
+
+  const { error: deleteError } = await supabase
+    .from("exam_skill_csa_assignments")
+    .delete()
+    .eq("exam_skill_id", examSkillId);
+
+  if (deleteError) return { error: deleteError.message };
+
+  if (input.csaIds.length > 0) {
+    const { error: insertError } = await supabase
+      .from("exam_skill_csa_assignments")
+      .insert(input.csaIds.map((csaId) => ({ exam_skill_id: examSkillId, csa_id: csaId })));
+    if (insertError) return { error: insertError.message };
+  }
+
+  return { error: null };
+}
+
 export async function addSkillToExam(
   supabase: SupabaseClient,
   input: { examId: string; skillId: string; assignedMarks: number; isCompulsory: boolean; csaIds: string[] },

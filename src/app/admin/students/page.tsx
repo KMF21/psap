@@ -62,6 +62,7 @@ export default async function StudentsPage() {
       ) : (
         <div className="rounded-lg border border-border bg-surface">
           <Toolbar searchPlaceholder="Search by name or reg. number…" />
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-ink-faint">
@@ -96,6 +97,7 @@ export default async function StudentsPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

@@ -20,6 +20,7 @@ export function CsaAccountsTable({ initialCsas }: { initialCsas: CsaAccount[] })
   }
 
   return (
+    <div className="overflow-x-auto">
     <table className="w-full text-sm">
       <thead>
         <tr className="border-b border-border text-left text-ink-faint">
@@ -59,5 +60,6 @@ export function CsaAccountsTable({ initialCsas }: { initialCsas: CsaAccount[] })
         ))}
       </tbody>
     </table>
+    </div>
   );
 }

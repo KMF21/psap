@@ -67,6 +67,7 @@ export default async function AdminDashboard() {
             {exams.length === 0 ? (
               <p className="px-5 py-8 text-center text-sm text-ink-faint">No examinations configured yet.</p>
             ) : (
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-ink-faint">
@@ -80,10 +81,10 @@ export default async function AdminDashboard() {
                 <tbody>
                   {exams.map((exam) => (
                     <tr key={exam.id} className="border-b border-border last:border-0">
-                      <td className="px-5 py-3.5 font-medium text-ink">{exam.title}</td>
-                      <td className="px-5 py-3.5 text-ink-muted">{exam.courseCode}</td>
-                      <td className="px-5 py-3.5 text-ink-muted">{exam.academicSession}</td>
-                      <td className="px-5 py-3.5 tabular text-ink-muted">
+                      <td className="px-5 py-3.5 font-medium text-ink whitespace-nowrap">{exam.title}</td>
+                      <td className="px-5 py-3.5 text-ink-muted whitespace-nowrap">{exam.courseCode}</td>
+                      <td className="px-5 py-3.5 text-ink-muted whitespace-nowrap">{exam.academicSession}</td>
+                      <td className="px-5 py-3.5 tabular text-ink-muted whitespace-nowrap">
                         {exam.practicalTargetTotal} {exam.projectMaxTotal > 0 && `+ ${exam.projectMaxTotal}`}
                       </td>
                       <td className="px-5 py-3.5">
@@ -93,6 +94,7 @@ export default async function AdminDashboard() {
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         </>
