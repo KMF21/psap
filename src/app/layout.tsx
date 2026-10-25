@@ -4,6 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "PSAP — Practical Skills Assessment Portal",
+  icons: { icon: "/logo.jpg", apple: "/logo.jpg" },
   description: "Practical skills examination and scoring portal for Community Health students.",
 };
 

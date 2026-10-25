@@ -85,6 +85,7 @@ export function ExportButtons({ data }: { data: ResultsData }) {
         </style>
       </head>
       <body>
+        <div style="margin-bottom:8px"><img src="${window.location.origin}/logo.jpg" alt="" style="height:56px;width:56px;object-fit:contain"></div>
         <h1>${escapeHtml(data.examTitle)}</h1>
         <p class="meta">Results generated ${new Date().toLocaleDateString()} · Practical: ${data.practicalTargetTotal}${data.projectMaxTotal > 0 ? ` + Project: ${data.projectMaxTotal}` : ""}</p>
         <table>

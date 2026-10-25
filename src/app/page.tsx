@@ -1,3 +1,4 @@
+import { Logo } from "@/components/ui/Logo";
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { SignOutButton } from "@clerk/nextjs";
@@ -23,6 +24,7 @@ export default async function Home() {
       <div className="flex flex-1 flex-col">
         <div className="flex flex-1 items-center justify-center bg-bg px-6">
           <div className="w-full max-w-md text-center">
+            <div className="mb-5 flex justify-center"><Logo size={72} /></div>
             <div
               className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-xl"
               style={{ background: "var(--warn-soft)" }}

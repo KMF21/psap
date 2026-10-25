@@ -56,6 +56,7 @@ export function ResultSheetButton({ data, row }: { data: ResultsData; row: Resul
         </style>
       </head>
       <body>
+        <div style="text-align:center;margin-bottom:8px"><img src="${window.location.origin}/logo.jpg" alt="" style="height:72px;width:72px;object-fit:contain"></div>
         <h1>Practical Skills Assessment — Result Sheet</h1>
         <p class="subtitle">Generated ${new Date().toLocaleDateString()}</p>
 

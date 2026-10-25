@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Logo } from "@/components/ui/Logo";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useUser, SignOutButton } from "@clerk/nextjs";
@@ -24,9 +25,7 @@ export function CsaSidebar() {
     <>
       <div className="flex items-center justify-between px-5 py-5">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md text-sm font-bold text-white" style={{ background: "var(--accent)" }}>
-            P
-          </div>
+          <Logo size={36} />
           <div>
             <p className="text-sm font-semibold leading-tight text-ink">PSAP</p>
             <p className="text-xs leading-tight text-ink-faint">CSA workspace</p>
@@ -86,9 +85,7 @@ export function CsaSidebar() {
         <button onClick={() => setMobileOpen(true)} className="rounded-md p-1.5 text-ink hover:bg-bg" aria-label="Open menu">
           <Menu size={20} />
         </button>
-        <div className="flex h-7 w-7 items-center justify-center rounded-md text-xs font-bold text-white" style={{ background: "var(--accent)" }}>
-          P
-        </div>
+        <Logo size={28} />
         <p className="text-sm font-semibold text-ink">PSAP</p>
       </div>
 

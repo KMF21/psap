@@ -1,8 +1,10 @@
+import { Logo } from "@/components/ui/Logo";
 import { SignUp } from "@clerk/nextjs";
 
 export default function SignUpPage() {
   return (
-    <div className="flex flex-1 items-center justify-center bg-bg px-6 py-12">
+    <div className="flex flex-1 flex-col items-center justify-center gap-5 bg-bg px-6 py-12">
+      <Logo size={88} />
       <SignUp
         appearance={{
           variables: {
