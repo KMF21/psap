@@ -27,7 +27,7 @@ export async function getDashboardData(
   const { count: totalSubmitted, error: submittedError } = await supabase
     .from("skill_assessments")
     .select("*", { count: "exact", head: true })
-    .eq("status", "submitted");
+    .in("status", ["submitted", "amended"]);
   if (submittedError) {
     return { stats: { totalStudents: 0, activeExams: 0, totalExams: 0, totalSubmitted: 0, totalAwaiting: 0 }, exams: [], error: submittedError.message };
   }
@@ -46,7 +46,7 @@ export async function getDashboardData(
   for (const es of examSkillRows ?? []) {
     const [{ count: eligible }, { count: submitted }] = await Promise.all([
       supabase.from("exam_eligibility").select("*", { count: "exact", head: true }).eq("exam_id", es.exam_id),
-      supabase.from("skill_assessments").select("*", { count: "exact", head: true }).eq("exam_skill_id", es.id).eq("status", "submitted"),
+      supabase.from("skill_assessments").select("*", { count: "exact", head: true }).eq("exam_skill_id", es.id).in("status", ["submitted", "amended"]),
     ]);
     totalAwaiting += Math.max((eligible ?? 0) - (submitted ?? 0), 0);
   }

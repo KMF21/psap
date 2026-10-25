@@ -3,6 +3,7 @@
 import { clerkClient } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { setCsaActive } from "@/lib/supabase/csas";
+import { isAdminSession } from "@/lib/auth";
 
 export interface InviteCsaState {
   error: string | null;
@@ -10,6 +11,10 @@ export interface InviteCsaState {
 }
 
 export async function inviteCsaAction(_prevState: InviteCsaState, formData: FormData): Promise<InviteCsaState> {
+  if (!(await isAdminSession())) {
+    return { error: "Only an Admin can invite CSAs.", success: null };
+  }
+
   const email = String(formData.get("email") ?? "").trim();
 
   if (!email || !email.includes("@")) {
@@ -38,6 +43,7 @@ export async function inviteCsaAction(_prevState: InviteCsaState, formData: Form
 }
 
 export async function toggleCsaActiveAction(csaUserId: string, isActive: boolean): Promise<{ error: string | null }> {
+  if (!(await isAdminSession())) return { error: "Only an Admin can change CSA accounts." };
   try {
     const supabase = await createServerSupabaseClient();
     const { error } = await setCsaActive(supabase, csaUserId, isActive);

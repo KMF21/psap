@@ -83,13 +83,23 @@ export async function POST(req: Request) {
         role,
         email: primaryEmail,
         phone: phone_numbers?.[0]?.phone_number ?? null,
-        is_active: true,
+        // is_active deliberately NOT set here: new rows default to true, and a
+        // later user.updated event must never re-activate a deactivated CSA.
       },
       { onConflict: "clerk_user_id" },
     );
 
     if (error) {
       console.error("Failed to sync Clerk user to Supabase:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+  }
+
+  if (event.type === "user.deleted" && event.data?.id) {
+    // Keep the row (assessments and the audit log reference it) but block access.
+    const { error } = await supabaseAdmin.from("users").update({ is_active: false }).eq("clerk_user_id", event.data.id);
+    if (error) {
+      console.error("Failed to deactivate deleted Clerk user:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
   }

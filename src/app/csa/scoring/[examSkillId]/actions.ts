@@ -2,7 +2,7 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { scaleScore } from "@/lib/types";
+import { scaleScore, validateStepScores } from "@/lib/types";
 
 export interface SaveAssessmentResult {
   error: string | null;
@@ -41,7 +41,7 @@ export async function saveAssessmentAction(
   // never trust a client-supplied total for the scaling calculation.
   const { data: esRow, error: esError } = await supabase
     .from("exam_skills")
-    .select("assigned_marks, skills(native_total)")
+    .select("assigned_marks, exams(status), skills(native_total, skill_steps(id, max_marks))")
     .eq("id", examSkillId)
     .single();
 
@@ -49,10 +49,25 @@ export async function saveAssessmentAction(
     return { error: "Couldn't find this exam skill.", status: null, rawScore: null, scaledScore: null };
   }
 
-  const nativeTotal = (esRow as unknown as { skills: { native_total: number } | null }).skills?.native_total ?? 0;
-  const assignedMarks = (esRow as unknown as { assigned_marks: number }).assigned_marks;
+  const es = esRow as unknown as {
+    assigned_marks: number;
+    exams: { status: string } | null;
+    skills: { native_total: number; skill_steps: { id: string; max_marks: number }[] } | null;
+  };
+  const nativeTotal = es.skills?.native_total ?? 0;
+  const assignedMarks = es.assigned_marks;
 
-  const rawScore = Object.values(stepScores).reduce((sum, v) => sum + (Number(v) || 0), 0);
+  if (es.exams?.status === "closed") {
+    return { error: "This examination is closed. Scores can no longer be changed here — ask the Admin.", status: null, rawScore: null, scaledScore: null };
+  }
+
+  const checked = validateStepScores(stepScores, es.skills?.skill_steps ?? []);
+  if (checked.error) {
+    return { error: checked.error, status: null, rawScore: null, scaledScore: null };
+  }
+  stepScores = checked.clean;
+
+  const rawScore = Math.round(Object.values(stepScores).reduce((sum, v) => sum + v, 0) * 10) / 10;
   const scaledScoreValue = scaleScore(rawScore, nativeTotal, assignedMarks);
 
   // Check for an existing assessment row — if it's already submitted, it's

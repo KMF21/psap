@@ -120,3 +120,26 @@ export function scaleScore(raw: number, nativeTotal: number, assignedMarks: numb
   if (nativeTotal === 0) return 0;
   return Math.round(((raw / nativeTotal) * assignedMarks) * 10) / 10;
 }
+
+/**
+ * Server-side check of submitted step scores against the skill's real steps.
+ * Never trust scores posted from the browser: every key must be a step of this
+ * skill and every value must be a finite number between 0 and that step's max.
+ */
+export function validateStepScores(
+  stepScores: Record<string, number>,
+  steps: { id: string; max_marks: number }[],
+): { error: string | null; clean: Record<string, number> } {
+  const maxById = new Map(steps.map((s) => [s.id, Number(s.max_marks)]));
+  const clean: Record<string, number> = {};
+  for (const [stepId, raw] of Object.entries(stepScores)) {
+    const max = maxById.get(stepId);
+    if (max === undefined) return { error: "A score was submitted for a step that is not part of this skill.", clean: {} };
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0 || value > max) {
+      return { error: `Each step score must be between 0 and its maximum marks (${max}).`, clean: {} };
+    }
+    clean[stepId] = Math.round(value * 10) / 10;
+  }
+  return { error: null, clean };
+}

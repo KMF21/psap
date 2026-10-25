@@ -57,11 +57,8 @@ export default async function Home() {
     <div className="flex flex-1 flex-col">
       <div className="flex flex-1 items-center justify-center bg-bg px-6">
         <div className="w-full max-w-md text-center">
-          <div
-            className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-xl text-lg font-bold text-white"
-            style={{ background: "var(--accent)" }}
-          >
-            P
+          <div className="mb-5 flex justify-center">
+            <Logo size={120} />
           </div>
           <h1 className="text-2xl font-semibold text-ink">Practical Skills Assessment Portal</h1>
           <p className="mt-2 text-sm text-ink-muted">

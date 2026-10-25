@@ -119,10 +119,15 @@ export default async function ExamResultsPage({ params }: { params: Promise<{ ex
                   {hasProject && (
                     <td className="px-4 py-3.5 text-right tabular text-ink-muted">
                       {row.projectScores.length > 0 ? (
-                        <>
+                        <Link
+                          href={`/admin/results/${examId}/project/${row.studentId}`}
+                          className="inline-flex items-center gap-1 underline decoration-dotted underline-offset-2 hover:text-accent-ink hover:decoration-solid"
+                          title="Correct this project score"
+                        >
                           {row.projectTotal}
-                          <span className="ml-1 text-xs text-ink-faint">({row.projectScores.join("+")})</span>
-                        </>
+                          <span className="text-xs text-ink-faint">({row.projectScores.join("+")})</span>
+                          <Pencil size={11} className="text-ink-faint" />
+                        </Link>
                       ) : (
                         "—"
                       )}

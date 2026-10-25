@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { adminUpdateAssessment } from "@/lib/supabase/scoring";
+import { isAdminSession } from "@/lib/auth";
 
 export interface AdminEditState {
   error: string | null;
@@ -11,18 +12,13 @@ export interface AdminEditState {
 
 export async function adminEditAssessmentAction(
   examId: string,
-  examSkillId: string,
   assessmentId: string,
-  nativeTotal: number,
-  assignedMarks: number,
-  previousRawScore: number | null,
-  previousScaledScore: number | null,
-  previousStatus: string | null,
   _prevState: AdminEditState,
   formData: FormData,
 ): Promise<AdminEditState> {
   const { userId } = await auth();
   if (!userId) return { error: "Not signed in." };
+  if (!(await isAdminSession())) return { error: "Only an Admin can correct scores." };
 
   const stepScores: Record<string, number> = {};
   for (const [key, value] of formData.entries()) {
@@ -39,14 +35,8 @@ export async function adminEditAssessmentAction(
 
     const { error } = await adminUpdateAssessment(supabase, {
       assessmentId,
-      examSkillId,
-      nativeTotal,
-      assignedMarks,
       stepScores,
       adminUserId: me.id,
-      previousRawScore,
-      previousScaledScore,
-      previousStatus,
     });
 
     if (error) return { error };

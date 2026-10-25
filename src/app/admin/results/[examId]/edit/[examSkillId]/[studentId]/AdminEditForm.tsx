@@ -10,13 +10,7 @@ export function AdminEditForm({ data }: { data: AdminEditData }) {
   const boundAction = adminEditAssessmentAction.bind(
     null,
     data.examId,
-    data.examSkillId,
     data.assessmentId!,
-    data.nativeTotal,
-    data.assignedMarks,
-    data.currentRawScore,
-    data.currentScaledScore,
-    data.currentStatus,
   );
   const [state, formAction, isPending] = useActionState<AdminEditState, FormData>(boundAction, { error: null });
   const [scores, setScores] = useState<Record<string, number>>(data.stepScores);

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { scaleScore, validateStepScores } from "@/lib/types";
 
 // ---------------- Dashboard: "my assignments" ----------------
 
@@ -45,7 +46,7 @@ export async function getMyAssignments(
         .from("skill_assessments")
         .select("*", { count: "exact", head: true })
         .eq("exam_skill_id", row.id)
-        .eq("status", "submitted"),
+        .in("status", ["submitted", "amended"]),
     ]);
 
     assignments.push({
@@ -101,7 +102,7 @@ export async function getMyProjectAssignments(
         .from("project_assessments")
         .select("*", { count: "exact", head: true })
         .eq("exam_id", row.exam_id)
-        .eq("status", "submitted"),
+        .in("status", ["submitted", "amended"]),
     ]);
 
     assignments.push({
@@ -196,6 +197,25 @@ export async function saveProjectAssessment(
   supabase: SupabaseClient,
   input: { examId: string; studentId: string; csaUserId: string; score: number; maxMarks: number; submit: boolean },
 ): Promise<SaveProjectAssessmentResult> {
+  // Max marks and exam status come from the database, never from the browser.
+  const { data: assignment } = await supabase
+    .from("exam_project_csa_assignments")
+    .select("max_marks, exams(status)")
+    .eq("exam_id", input.examId)
+    .eq("csa_id", input.csaUserId)
+    .maybeSingle();
+  if (!assignment) {
+    return { error: "You are not assigned to score the project for this examination.", status: null };
+  }
+  const a = assignment as unknown as { max_marks: number; exams: { status: string } | null };
+  if (a.exams?.status === "closed") {
+    return { error: "This examination is closed. Scores can no longer be changed here — ask the Admin.", status: null };
+  }
+  if (!Number.isFinite(input.score)) {
+    return { error: "Enter a valid score.", status: null };
+  }
+  input = { ...input, maxMarks: Number(a.max_marks) };
+
   const { data: existing } = await supabase
     .from("project_assessments")
     .select("id, status")
@@ -211,26 +231,43 @@ export async function saveProjectAssessment(
     };
   }
 
-  const clampedScore = Math.max(0, Math.min(input.score, input.maxMarks));
+  const clampedScore = Math.round(Math.max(0, Math.min(input.score, input.maxMarks)) * 10) / 10;
   const newStatus = input.submit ? "submitted" : "draft";
 
+  let assessmentId: string;
   if (existing) {
     const { error } = await supabase
       .from("project_assessments")
       .update({ score: clampedScore, status: newStatus, submitted_at: input.submit ? new Date().toISOString() : null })
       .eq("id", existing.id);
     if (error) return { error: error.message, status: null };
+    assessmentId = existing.id;
   } else {
-    const { error } = await supabase.from("project_assessments").insert({
-      exam_id: input.examId,
-      student_id: input.studentId,
-      csa_id: input.csaUserId,
-      score: clampedScore,
-      max_marks: input.maxMarks,
-      status: newStatus,
-      submitted_at: input.submit ? new Date().toISOString() : null,
+    const { data: inserted, error } = await supabase
+      .from("project_assessments")
+      .insert({
+        exam_id: input.examId,
+        student_id: input.studentId,
+        csa_id: input.csaUserId,
+        score: clampedScore,
+        max_marks: input.maxMarks,
+        status: newStatus,
+        submitted_at: input.submit ? new Date().toISOString() : null,
+      })
+      .select("id")
+      .single();
+    if (error || !inserted) return { error: error?.message ?? "Failed to save the project score.", status: null };
+    assessmentId = inserted.id;
+  }
+
+  if (input.submit) {
+    await supabase.from("audit_log").insert({
+      entity_type: "project_assessment",
+      entity_id: assessmentId,
+      action: "submit",
+      actor_id: input.csaUserId,
+      new_value: { score: clampedScore, status: newStatus },
     });
-    if (error) return { error: error.message, status: null };
   }
 
   return { error: null, status: newStatus };
@@ -254,7 +291,7 @@ export interface ScoringExamSkill {
   steps: ScoringStep[];
 }
 
-export type AssessmentStatus = "pending" | "draft" | "submitted";
+export type AssessmentStatus = "pending" | "draft" | "submitted" | "amended";
 
 export interface ScoringStudent {
   id: string;
@@ -487,19 +524,37 @@ export async function adminUpdateAssessment(
   supabase: SupabaseClient,
   input: {
     assessmentId: string;
-    examSkillId: string;
-    nativeTotal: number;
-    assignedMarks: number;
     stepScores: Record<string, number>;
     adminUserId: string;
-    previousRawScore: number | null;
-    previousScaledScore: number | null;
-    previousStatus: string | null;
   },
 ): Promise<AdminEditResult> {
-  const rawScore = Object.values(input.stepScores).reduce((sum, v) => sum + (Number(v) || 0), 0);
-  const scaledScore =
-    input.nativeTotal > 0 ? Math.round(((rawScore / input.nativeTotal) * input.assignedMarks) * 10) / 10 : 0;
+  // Everything that determines the result is read from the database here —
+  // the browser only supplies the step scores, which are validated below.
+  const { data: current, error: currentError } = await supabase
+    .from("skill_assessments")
+    .select("raw_score, scaled_score, status, exam_skills(assigned_marks, skills(native_total, skill_steps(id, max_marks)))")
+    .eq("id", input.assessmentId)
+    .maybeSingle();
+
+  if (currentError) return { error: currentError.message };
+  if (!current) return { error: "That assessment no longer exists." };
+
+  const cur = current as unknown as {
+    raw_score: number | null;
+    scaled_score: number | null;
+    status: string;
+    exam_skills: { assigned_marks: number; skills: { native_total: number; skill_steps: { id: string; max_marks: number }[] } | null } | null;
+  };
+  const nativeTotal = cur.exam_skills?.skills?.native_total ?? 0;
+  const assignedMarks = cur.exam_skills?.assigned_marks ?? 0;
+
+  const checked = validateStepScores(input.stepScores, cur.exam_skills?.skills?.skill_steps ?? []);
+  if (checked.error) return { error: checked.error };
+  input = { ...input, stepScores: checked.clean };
+
+  const previous = { raw_score: cur.raw_score, scaled_score: cur.scaled_score, status: cur.status };
+  const rawScore = Math.round(Object.values(input.stepScores).reduce((sum, v) => sum + v, 0) * 10) / 10;
+  const scaledScore = scaleScore(rawScore, nativeTotal, assignedMarks);
 
   const { error: updateError } = await supabase
     .from("skill_assessments")
@@ -529,9 +584,85 @@ export async function adminUpdateAssessment(
     entity_id: input.assessmentId,
     action: "admin_edit",
     actor_id: input.adminUserId,
-    previous_value: { raw_score: input.previousRawScore, scaled_score: input.previousScaledScore, status: input.previousStatus },
+    previous_value: previous,
     new_value: { raw_score: rawScore, scaled_score: scaledScore, status: "amended" },
   });
 
+  return { error: null };
+}
+
+// ---------------- Admin correction of project scores ----------------
+
+export interface AdminProjectEditRow {
+  id: string;
+  csaName: string;
+  score: number | null;
+  maxMarks: number;
+  status: string;
+}
+
+export async function getProjectAssessmentsForEdit(
+  supabase: SupabaseClient,
+  examId: string,
+  studentId: string,
+): Promise<{ rows: AdminProjectEditRow[]; studentName: string | null; studentRegNumber: string | null; examTitle: string | null; error: string | null }> {
+  const [{ data: student }, { data: exam }, { data: rows, error }] = await Promise.all([
+    supabase.from("students").select("full_name, registration_number").eq("id", studentId).maybeSingle(),
+    supabase.from("exams").select("title").eq("id", examId).maybeSingle(),
+    supabase
+      .from("project_assessments")
+      .select("id, score, max_marks, status, users(full_name)")
+      .eq("exam_id", examId)
+      .eq("student_id", studentId)
+      .order("created_at", { ascending: true }),
+  ]);
+  if (error) return { rows: [], studentName: null, studentRegNumber: null, examTitle: null, error: error.message };
+
+  return {
+    rows: ((rows ?? []) as unknown as { id: string; score: number | null; max_marks: number; status: string; users: { full_name: string } | null }[]).map(
+      (r) => ({ id: r.id, csaName: r.users?.full_name ?? "Unknown CSA", score: r.score, maxMarks: Number(r.max_marks), status: r.status }),
+    ),
+    studentName: student?.full_name ?? null,
+    studentRegNumber: student?.registration_number ?? null,
+    examTitle: exam?.title ?? null,
+    error: null,
+  };
+}
+
+export async function adminUpdateProjectScores(
+  supabase: SupabaseClient,
+  input: { examId: string; studentId: string; scores: Record<string, number>; adminUserId: string },
+): Promise<{ error: string | null }> {
+  const { data: rows, error } = await supabase
+    .from("project_assessments")
+    .select("id, score, max_marks, status")
+    .eq("exam_id", input.examId)
+    .eq("student_id", input.studentId);
+  if (error) return { error: error.message };
+
+  for (const row of rows ?? []) {
+    if (!(row.id in input.scores)) continue;
+    const next = Number(input.scores[row.id]);
+    if (!Number.isFinite(next) || next < 0 || next > Number(row.max_marks)) {
+      return { error: `Each project score must be between 0 and ${row.max_marks}.` };
+    }
+    const rounded = Math.round(next * 10) / 10;
+    if (rounded === row.score && row.status !== "draft") continue; // unchanged
+
+    const { error: updateError } = await supabase
+      .from("project_assessments")
+      .update({ score: rounded, status: "amended" })
+      .eq("id", row.id);
+    if (updateError) return { error: updateError.message };
+
+    await supabase.from("audit_log").insert({
+      entity_type: "project_assessment",
+      entity_id: row.id,
+      action: "admin_edit",
+      actor_id: input.adminUserId,
+      previous_value: { score: row.score, status: row.status },
+      new_value: { score: rounded, status: "amended" },
+    });
+  }
   return { error: null };
 }

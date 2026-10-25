@@ -80,7 +80,7 @@ export async function getResultsData(
           .from("skill_assessments")
           .select("exam_skill_id, student_id, scaled_score, status")
           .in("exam_skill_id", examSkillIds)
-          .eq("status", "submitted")
+          .in("status", ["submitted", "amended"])
       : { data: [] as SkillAssessmentRow[], error: null };
 
   if (assessmentsError) return { data: null, error: assessmentsError.message };
@@ -102,7 +102,7 @@ export async function getResultsData(
     .from("project_assessments")
     .select("student_id, score, status")
     .eq("exam_id", examId)
-    .eq("status", "submitted");
+    .in("status", ["submitted", "amended"]);
 
   if (projectError) return { data: null, error: projectError.message };
 

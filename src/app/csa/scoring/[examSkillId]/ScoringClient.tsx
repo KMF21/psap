@@ -31,7 +31,7 @@ export function ScoringClient({
   );
 
   const selected = students.find((s) => s.id === selectedId);
-  const isLocked = selected?.status === "submitted";
+  const isLocked = selected?.status === "submitted" || selected?.status === "amended";
 
   function selectStudent(student: ScoringStudent) {
     setSelectedId(student.id);
@@ -92,7 +92,7 @@ export function ScoringClient({
                     <p className="text-xs tabular text-ink-faint">{s.registrationNumber}</p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {s.status === "submitted" && <Lock size={12} className="text-ink-faint" />}
+                    {(s.status === "submitted" || s.status === "amended") && <Lock size={12} className="text-ink-faint" />}
                     {s.id === selectedId && <Check size={15} style={{ color: "var(--accent-ink)" }} />}
                   </div>
                 </button>
