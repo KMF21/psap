@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { Search, Check, Save, Lock, AlertTriangle } from "lucide-react";
+import { Search, Check, Save, Lock, AlertTriangle, ArrowLeft } from "lucide-react";
 import { StatusPill } from "@/components/ui/StatusPill";
 import type { ProjectScoringData, ProjectScoringStudent } from "@/lib/supabase/scoring";
 import { saveProjectScoreAction } from "./actions";
@@ -16,6 +16,7 @@ export function ProjectScoringClient({
   const [students, setStudents] = useState(initialStudents);
   const [selectedId, setSelectedId] = useState(initialStudents[0]?.id ?? null);
   const [query, setQuery] = useState("");
+  const [mobileView, setMobileView] = useState<"list" | "form">("list");
   const [score, setScore] = useState<number>(initialStudents[0]?.score ?? 0);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -37,6 +38,8 @@ export function ProjectScoringClient({
     setSelectedId(student.id);
     setScore(student.score ?? 0);
     setError(null);
+    setMobileView("form");
+    document.querySelector("main")?.scrollTo({ top: 0 });
   }
 
   function handleSave(submit: boolean) {
@@ -54,7 +57,7 @@ export function ProjectScoringClient({
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <div className="rounded-lg border border-border bg-surface lg:col-span-1">
+      <div className={`rounded-lg border border-border bg-surface lg:col-span-1 ${mobileView === "form" ? "hidden lg:block" : ""}`}>
         <div className="border-b border-border p-3">
           <div className="relative">
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint" />
@@ -62,11 +65,11 @@ export function ProjectScoringClient({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search reg. number or name…"
-              className="w-full rounded-md border border-border bg-bg py-2 pl-8 pr-3 text-sm text-ink placeholder:text-ink-faint"
+              className="w-full rounded-md border border-border bg-bg py-2.5 pl-8 pr-3 text-base text-ink placeholder:text-ink-faint sm:text-sm"
             />
           </div>
         </div>
-        <ul className="max-h-[520px] overflow-y-auto">
+        <ul className="max-h-[70vh] overflow-y-auto lg:max-h-[520px]">
           {filtered.length === 0 ? (
             <li className="px-4 py-8 text-center text-sm text-ink-faint">No eligible students found.</li>
           ) : (
@@ -74,7 +77,7 @@ export function ProjectScoringClient({
               <li key={s.id}>
                 <button
                   onClick={() => selectStudent(s)}
-                  className="flex w-full items-center justify-between border-b border-border px-4 py-3 text-left last:border-0"
+                  className="flex w-full items-center justify-between gap-3 border-b border-border px-4 py-3.5 text-left last:border-0"
                   style={s.id === selectedId ? { background: "var(--accent-soft)" } : {}}
                 >
                   <div>
@@ -92,12 +95,19 @@ export function ProjectScoringClient({
         </ul>
       </div>
 
-      <div className="rounded-lg border border-border bg-surface lg:col-span-2">
+      <div className={`rounded-lg border border-border bg-surface lg:col-span-2 ${mobileView === "list" ? "hidden lg:block" : ""}`}>
         {selected ? (
           <>
-            <div className="flex items-center justify-between border-b border-border px-5 py-4">
-              <div>
-                <p className="text-sm font-semibold text-ink">{selected.fullName}</p>
+            <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-4 sm:px-5">
+              <div className="min-w-0">
+                <button
+                type="button"
+                onClick={() => setMobileView("list")}
+                className="mb-2 flex items-center gap-1 text-sm font-medium text-accent-ink lg:hidden"
+              >
+                <ArrowLeft size={14} /> All students
+              </button>
+              <p className="text-sm font-semibold text-ink">{selected.fullName}</p>
                 <p className="text-xs tabular text-ink-faint">{selected.registrationNumber} · {selected.level}</p>
               </div>
               <StatusPill status={selected.status} />
@@ -125,12 +135,13 @@ export function ProjectScoringClient({
                 <input
                   id="projectScore"
                   type="number"
+                  inputMode="decimal"
                   min={0}
                   max={examData.maxMarks}
                   disabled={isLocked}
                   value={score}
                   onChange={(e) => setScore(Math.min(Math.max(Number(e.target.value) || 0, 0), examData.maxMarks))}
-                  className="w-24 rounded-md border border-border bg-bg px-3 py-2 text-right text-lg font-semibold tabular text-ink disabled:opacity-50"
+                  className="h-12 w-28 rounded-md border border-border bg-bg px-3 text-right text-lg font-semibold tabular text-ink disabled:opacity-50"
                 />
                 <span className="text-sm text-ink-faint">/ {examData.maxMarks}</span>
               </div>
@@ -140,18 +151,18 @@ export function ProjectScoringClient({
               </p>
             </div>
 
-            <div className="flex items-center justify-end gap-2 border-t border-border bg-bg/50 px-5 py-4">
+            <div className="sticky bottom-0 z-10 grid grid-cols-2 gap-2 rounded-b-lg border-t border-border bg-surface px-4 py-3 sm:flex sm:items-center sm:justify-end sm:px-5 sm:py-4">
               <button
                 onClick={() => handleSave(false)}
                 disabled={isLocked || isPending}
-                className="rounded-md border border-border px-4 py-2 text-sm font-medium text-ink hover:bg-surface disabled:opacity-50"
+                className="rounded-md border border-border px-4 py-3 text-sm font-medium text-ink hover:bg-bg disabled:opacity-50 sm:py-2"
               >
                 {isPending ? "Saving…" : "Save as draft"}
               </button>
               <button
                 onClick={() => handleSave(true)}
                 disabled={isLocked || isPending}
-                className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className="flex items-center justify-center gap-1.5 rounded-md px-4 py-3 text-sm font-medium text-white disabled:opacity-50 sm:py-2"
                 style={{ background: "var(--accent)" }}
               >
                 <Save size={14} /> {isPending ? "Submitting…" : "Submit score"}

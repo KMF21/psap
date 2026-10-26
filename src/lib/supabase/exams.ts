@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAll } from "./paging";
 
 export interface ExamListItem {
   id: string;
@@ -297,19 +298,27 @@ export async function getStudentsWithEligibility(
   supabase: SupabaseClient,
   examId: string,
 ): Promise<{ students: StudentEligibilityRow[]; error: string | null }> {
-  const { data: allStudents, error: studentsError } = await supabase
-    .from("students")
-    .select("id, registration_number, full_name, level")
-    .order("full_name", { ascending: true });
+  const { data: allStudents, error: studentsError } = await fetchAll<{
+    id: string;
+    registration_number: string;
+    full_name: string;
+    level: string | null;
+  }>((from, to) =>
+    supabase
+      .from("students")
+      .select("id, registration_number, full_name, level")
+      .order("full_name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
-  if (studentsError) return { students: [], error: studentsError.message };
+  if (studentsError) return { students: [], error: studentsError };
 
-  const { data: eligibleRows, error: eligibilityError } = await supabase
-    .from("exam_eligibility")
-    .select("student_id")
-    .eq("exam_id", examId);
+  const { data: eligibleRows, error: eligibilityError } = await fetchAll<{ student_id: string }>((from, to) =>
+    supabase.from("exam_eligibility").select("student_id").eq("exam_id", examId).order("student_id").range(from, to),
+  );
 
-  if (eligibilityError) return { students: [], error: eligibilityError.message };
+  if (eligibilityError) return { students: [], error: eligibilityError };
 
   const eligibleIds = new Set((eligibleRows ?? []).map((r) => r.student_id));
 

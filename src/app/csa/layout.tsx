@@ -18,7 +18,7 @@ export default async function CsaLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-bg">
+    <div className="flex h-dvh overflow-hidden bg-bg">
       <CsaSidebar />
       <main className="flex flex-1 flex-col overflow-y-auto pt-14 lg:pt-0">
         <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:px-8 sm:py-8">{children}</div>

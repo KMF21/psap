@@ -13,7 +13,7 @@ export function NewExamForm({ courses, sessions }: { courses: CourseOption[]; se
   const [examType, setExamType] = useState<"practical_only" | "practical_and_project">("practical_only");
 
   return (
-    <form action={formAction} className="max-w-2xl space-y-6 rounded-lg border border-border bg-surface p-6">
+    <form action={formAction} className="max-w-2xl space-y-6 rounded-lg border border-border bg-surface p-4 sm:p-6">
       {state.error && (
         <div
           className="flex items-start gap-2 rounded-md p-3 text-sm"

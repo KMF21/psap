@@ -2,14 +2,21 @@ import { FileBarChart, AlertTriangle, Pencil } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Toolbar } from "@/components/ui/Toolbar";
+import { FilterBar } from "@/components/ui/FilterBar";
 import { ExportButtons } from "./ExportButtons";
 import { ResultSheetButton } from "./ResultSheetButton";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getResultsData } from "@/lib/supabase/results";
 
-export default async function ExamResultsPage({ params }: { params: Promise<{ examId: string }> }) {
+export default async function ExamResultsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ examId: string }>;
+  searchParams: Promise<{ q?: string }>;
+}) {
   const { examId } = await params;
+  const { q } = await searchParams;
 
   let data: Awaited<ReturnType<typeof getResultsData>>["data"] = null;
   let error: string | null = null;
@@ -44,6 +51,10 @@ export default async function ExamResultsPage({ params }: { params: Promise<{ ex
   if (!data) notFound();
 
   const hasProject = data.projectMaxTotal > 0;
+  const needle = (q ?? "").trim().toLowerCase();
+  const visibleRows = needle
+    ? data.rows.filter((r) => r.fullName.toLowerCase().includes(needle) || r.registrationNumber.toLowerCase().includes(needle))
+    : data.rows;
   const grandTotalMax = data.practicalTargetTotal + data.projectMaxTotal;
 
   return (
@@ -60,18 +71,24 @@ export default async function ExamResultsPage({ params }: { params: Promise<{ ex
       />
 
       <div className="rounded-lg border border-border bg-surface">
-        <Toolbar searchPlaceholder="Search by name or reg. number…" rightSlot={<ExportButtons data={data} />} />
-        {data.rows.length === 0 ? (
-          <p className="px-5 py-10 text-center text-sm text-ink-faint">No eligible students for this examination yet.</p>
+        <FilterBar
+          searchPlaceholder="Search name or reg. number…"
+          rightSlot={<ExportButtons data={data} />}
+          resultNote={needle ? `Showing ${visibleRows.length} of ${data.rows.length} students (exports always include everyone)` : `${data.rows.length} students`}
+        />
+        {visibleRows.length === 0 ? (
+          <p className="px-5 py-10 text-center text-sm text-ink-faint">
+            {needle ? "No students match your search." : "No eligible students for this examination yet."}
+          </p>
         ) : (
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border text-left text-ink-faint">
-                <th className="px-5 py-3 font-medium">Student</th>
+                <th className="sticky left-0 z-10 bg-surface px-4 py-3 font-medium sm:px-5">Student</th>
                 {data.skillColumns.map((col) => (
-                  <th key={col.examSkillId} className="px-4 py-3 text-right font-medium">
-                    {col.skillName.split(" ").slice(0, 2).join(" ")}
+                  <th key={col.examSkillId} className="min-w-[7.5rem] max-w-[10rem] whitespace-normal px-3 py-3 text-right align-bottom text-xs font-medium leading-tight sm:px-4 sm:text-sm">
+                    {col.skillName}
                     <div className="font-normal text-ink-faint">/ {col.assignedMarks}</div>
                   </th>
                 ))}
@@ -93,10 +110,12 @@ export default async function ExamResultsPage({ params }: { params: Promise<{ ex
               </tr>
             </thead>
             <tbody>
-              {data.rows.map((row) => (
+              {visibleRows.map((row) => (
                 <tr key={row.studentId} className="border-b border-border last:border-0">
-                  <td className="px-5 py-3.5">
-                    <p className="font-medium text-ink">{row.fullName}</p>
+                  <td className="sticky left-0 z-10 bg-surface px-4 py-3.5 sm:px-5">
+                    <Link href={`/admin/students/${row.studentId}`} className="font-medium text-ink hover:text-accent-ink hover:underline">
+                      {row.fullName}
+                    </Link>
                     <p className="text-xs tabular text-ink-faint">{row.registrationNumber}</p>
                   </td>
                   {row.skillScores.map((score, i) => (

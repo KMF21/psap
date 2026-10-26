@@ -1,11 +1,18 @@
 import { ClipboardList, Plus, AlertTriangle } from "lucide-react";
 import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { StatusPill } from "@/components/ui/StatusPill";
+import { ExamStatusPill } from "@/components/ui/ExamStatusPill";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getExams } from "@/lib/supabase/exams";
+import { FilterBar } from "@/components/ui/FilterBar";
+import { filterExams, examFilterOptions } from "@/lib/exam-filters";
 
-export default async function ExamsPage() {
+export default async function ExamsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; session?: string; course?: string; status?: string }>;
+}) {
+  const sp = await searchParams;
   let exams: Awaited<ReturnType<typeof getExams>>["exams"] = [];
   let error: string | null = null;
 
@@ -17,6 +24,9 @@ export default async function ExamsPage() {
   } catch (e) {
     error = e instanceof Error ? e.message : "Unknown error connecting to the database.";
   }
+
+  const opts = examFilterOptions(exams);
+  const shown = filterExams(exams, sp);
 
   return (
     <div>
@@ -52,33 +62,50 @@ export default async function ExamsPage() {
           No examinations configured yet.
         </div>
       ) : (
+        <>
+        <div className="mb-4 rounded-lg border border-border bg-surface">
+          <FilterBar
+            searchPlaceholder="Search exam title or course…"
+            selects={[
+              { param: "session", label: "All sessions", options: opts.sessions },
+              { param: "course", label: "All courses", options: opts.courses },
+              { param: "status", label: "Any status", options: [{ value: "draft", label: "Draft" }, { value: "open", label: "Open" }, { value: "closed", label: "Closed" }] },
+            ]}
+            resultNote={shown.length === exams.length ? `${exams.length} examinations` : `Showing ${shown.length} of ${exams.length}`}
+          />
+        </div>
+        {shown.length === 0 ? (
+          <div className="rounded-lg border border-border bg-surface p-10 text-center text-sm text-ink-faint">No examinations match these filters.</div>
+        ) : (
         <div className="space-y-4">
-          {exams.map((exam) => (
+          {shown.map((exam) => (
             <Link
               key={exam.id}
               href={`/admin/exams/${exam.id}`}
               className="block rounded-lg border border-border bg-surface p-5 transition-colors hover:border-accent"
             >
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
                   <p className="text-sm font-semibold text-ink">{exam.title}</p>
                   <p className="mt-1 text-xs text-ink-muted">
                     {exam.courseCode} · {exam.academicSession} · {exam.skillCount} skill{exam.skillCount !== 1 ? "s" : ""} configured
                   </p>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
+                <div className="flex items-center justify-between gap-4 sm:justify-end">
+                  <div className="sm:text-right">
                     <p className="text-sm font-semibold tabular text-ink">
                       {exam.practicalTargetTotal}{exam.projectMaxTotal > 0 && ` + ${exam.projectMaxTotal}`}
                     </p>
                     <p className="text-xs text-ink-faint">practical{exam.projectMaxTotal > 0 && " + project"}</p>
                   </div>
-                  <StatusPill status={exam.status === "open" ? "submitted" : exam.status === "closed" ? "amended" : "draft"} />
+                  <ExamStatusPill status={exam.status} />
                 </div>
               </div>
             </Link>
           ))}
         </div>
+        )}
+        </>
       )}
     </div>
   );

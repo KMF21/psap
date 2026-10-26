@@ -60,13 +60,13 @@ export default async function CsaDashboard() {
             <Link
               key={a.examSkillId}
               href={`/csa/scoring/${a.examSkillId}`}
-              className="flex items-center justify-between rounded-lg border border-border bg-surface p-5 hover:border-accent"
+              className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 hover:border-accent sm:flex-row sm:items-center sm:justify-between sm:p-5"
             >
               <div>
                 <p className="text-sm font-semibold text-ink">{a.skillName}</p>
                 <p className="mt-1 text-xs text-ink-muted">{a.examTitle} · {a.assignedMarks} marks</p>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center justify-between gap-4 sm:justify-end">
                 <p className="text-sm tabular text-ink-muted">{a.totalSubmitted} of {a.totalEligible} scored</p>
                 <StatusPill status={progressStatus(a.totalSubmitted, a.totalEligible)} />
               </div>
@@ -77,7 +77,7 @@ export default async function CsaDashboard() {
             <Link
               key={a.examId}
               href={`/csa/project/${a.examId}`}
-              className="flex items-center justify-between rounded-lg border border-border bg-surface p-5 hover:border-accent"
+              className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 hover:border-accent sm:flex-row sm:items-center sm:justify-between sm:p-5"
             >
               <div className="flex items-center gap-2.5">
                 <FolderCheck size={16} className="text-ink-faint" />
@@ -86,7 +86,7 @@ export default async function CsaDashboard() {
                   <p className="mt-1 text-xs text-ink-muted">{a.examTitle} · {a.maxMarks} marks</p>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center justify-between gap-4 sm:justify-end">
                 <p className="text-sm tabular text-ink-muted">{a.totalSubmitted} of {a.totalEligible} scored</p>
                 <StatusPill status={progressStatus(a.totalSubmitted, a.totalEligible)} />
               </div>

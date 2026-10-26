@@ -47,7 +47,7 @@ export default function NewSkillPage() {
         ]}
       />
 
-      <form action={formAction} className="max-w-2xl space-y-5 rounded-lg border border-border bg-surface p-6">
+      <form action={formAction} className="max-w-2xl space-y-5 rounded-lg border border-border bg-surface p-4 sm:p-6">
         {state.error && (
           <div
             className="flex items-start gap-2 rounded-md p-3 text-sm"
@@ -86,7 +86,7 @@ export default function NewSkillPage() {
         </div>
 
         <div>
-          <div className="mb-2 flex items-center justify-between">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
             <p className="text-sm font-medium text-ink">Rubric steps</p>
             <p className="text-xs text-ink-faint">
               Native total: <span className="font-semibold tabular text-ink">{total}</span> marks
@@ -95,14 +95,14 @@ export default function NewSkillPage() {
 
           <div className="space-y-2">
             {steps.map((step, i) => (
-              <div key={step.key} className="flex items-start gap-2">
+              <div key={step.key} className="flex flex-wrap items-start gap-2 sm:flex-nowrap">
                 <span className="mt-2.5 w-5 shrink-0 text-xs text-ink-faint">{i + 1}.</span>
                 <input
                   name="stepDescription"
                   value={step.description}
                   onChange={(e) => updateStep(step.key, "description", e.target.value)}
                   placeholder="Step description"
-                  className="flex-1 rounded-md border border-border bg-bg px-3 py-2 text-sm text-ink placeholder:text-ink-faint"
+                  className="min-w-0 flex-1 basis-[calc(100%-3rem)] rounded-md border border-border bg-bg px-3 py-2.5 text-base text-ink placeholder:text-ink-faint sm:basis-auto sm:py-2 sm:text-sm"
                 />
                 <input
                   name="stepMaxMarks"
@@ -111,7 +111,7 @@ export default function NewSkillPage() {
                   value={step.maxMarks}
                   onChange={(e) => updateStep(step.key, "maxMarks", e.target.value)}
                   placeholder="Marks"
-                  className="w-20 shrink-0 rounded-md border border-border bg-bg px-3 py-2 text-right text-sm tabular text-ink placeholder:text-ink-faint"
+                  inputMode="numeric" className="ml-7 w-24 shrink-0 rounded-md border border-border bg-bg px-3 py-2.5 text-right text-base sm:ml-0 sm:w-20 sm:py-2 sm:text-sm tabular text-ink placeholder:text-ink-faint"
                 />
                 <button
                   type="button"

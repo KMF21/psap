@@ -1,7 +1,7 @@
 import { LayoutDashboard, Users, ClipboardCheck, Clock, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { StatCard } from "@/components/ui/StatCard";
-import { StatusPill } from "@/components/ui/StatusPill";
+import { ExamStatusPill } from "@/components/ui/ExamStatusPill";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getDashboardData } from "@/lib/supabase/dashboard";
 
@@ -88,7 +88,7 @@ export default async function AdminDashboard() {
                         {exam.practicalTargetTotal} {exam.projectMaxTotal > 0 && `+ ${exam.projectMaxTotal}`}
                       </td>
                       <td className="px-5 py-3.5">
-                        <StatusPill status={exam.status === "open" ? "submitted" : exam.status === "closed" ? "amended" : "draft"} />
+                        <ExamStatusPill status={exam.status} />
                       </td>
                     </tr>
                   ))}

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchAll } from "./paging";
 
 export interface ResultsSkillColumn {
   examSkillId: string;
@@ -30,8 +31,8 @@ export interface ResultsData {
 type ExamRow = { title: string; practical_target_total: number; project_max_total: number; academic_sessions: { label: string } | null };
 type ExamSkillRow = { id: string; assigned_marks: number; skills: { name: string } | null };
 type StudentRow = { id: string; registration_number: string; full_name: string; level: string | null };
-type SkillAssessmentRow = { exam_skill_id: string; student_id: string; scaled_score: number | null; status: string };
-type ProjectAssessmentRow = { student_id: string; score: number | null; status: string };
+type SkillAssessmentRow = { id?: string; exam_skill_id: string; student_id: string; scaled_score: number | null; status: string };
+type ProjectAssessmentRow = { id?: string; student_id: string; score: number | null; status: string };
 
 export async function getResultsData(
   supabase: SupabaseClient,
@@ -63,27 +64,35 @@ export async function getResultsData(
   }));
   const examSkillIds = skillColumns.map((c) => c.examSkillId);
 
-  const { data: studentRows, error: studentsError } = await supabase
-    .from("students")
-    .select("id, registration_number, full_name, level, exam_eligibility!inner(exam_id)")
-    .eq("exam_eligibility.exam_id", examId)
-    .order("full_name", { ascending: true });
+  const { data: studentRows, error: studentsError } = await fetchAll<StudentRow>((from, to) =>
+    supabase
+      .from("students")
+      .select("id, registration_number, full_name, level, exam_eligibility!inner(exam_id)")
+      .eq("exam_eligibility.exam_id", examId)
+      .order("full_name", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
-  if (studentsError) return { data: null, error: studentsError.message };
+  if (studentsError) return { data: null, error: studentsError };
 
   // Only SUBMITTED scores count toward results — a draft in progress isn't
   // official yet. Admin sees every CSA's submissions here (unlike a CSA's
   // own scoped view), via the admin_all_skill_assessments RLS policy.
   const { data: assessmentRows, error: assessmentsError } =
     examSkillIds.length > 0
-      ? await supabase
-          .from("skill_assessments")
-          .select("exam_skill_id, student_id, scaled_score, status")
-          .in("exam_skill_id", examSkillIds)
-          .in("status", ["submitted", "amended"])
+      ? await fetchAll<SkillAssessmentRow>((from, to) =>
+          supabase
+            .from("skill_assessments")
+            .select("id, exam_skill_id, student_id, scaled_score, status")
+            .in("exam_skill_id", examSkillIds)
+            .in("status", ["submitted", "amended"])
+            .order("id", { ascending: true })
+            .range(from, to),
+        )
       : { data: [] as SkillAssessmentRow[], error: null };
 
-  if (assessmentsError) return { data: null, error: assessmentsError.message };
+  if (assessmentsError) return { data: null, error: assessmentsError };
 
   // Keyed by "examSkillId::studentId". The spec's model is one CSA per
   // skill; if more than one submitted row exists for the same pair (a
@@ -98,13 +107,17 @@ export async function getResultsData(
     }
   }
 
-  const { data: projectRows, error: projectError } = await supabase
-    .from("project_assessments")
-    .select("student_id, score, status")
-    .eq("exam_id", examId)
-    .in("status", ["submitted", "amended"]);
+  const { data: projectRows, error: projectError } = await fetchAll<ProjectAssessmentRow>((from, to) =>
+    supabase
+      .from("project_assessments")
+      .select("id, student_id, score, status")
+      .eq("exam_id", examId)
+      .in("status", ["submitted", "amended"])
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
-  if (projectError) return { data: null, error: projectError.message };
+  if (projectError) return { data: null, error: projectError };
 
   const projectScoresByStudent = new Map<string, number[]>();
   for (const row of (projectRows ?? []) as unknown as ProjectAssessmentRow[]) {
@@ -116,9 +129,9 @@ export async function getResultsData(
 
   const rows: ResultsRow[] = ((studentRows ?? []) as unknown as StudentRow[]).map((student) => {
     const skillScores = skillColumns.map((col) => skillScoreMap.get(`${col.examSkillId}::${student.id}`) ?? null);
-    const practicalTotal = skillScores.reduce((sum: number, s) => sum + (s ?? 0), 0);
+    const practicalTotal = Math.round(skillScores.reduce((sum: number, s) => sum + (s ?? 0), 0) * 10) / 10;
     const projectScores = projectScoresByStudent.get(student.id) ?? [];
-    const projectTotal = projectScores.reduce((sum, s) => sum + s, 0);
+    const projectTotal = Math.round(projectScores.reduce((sum, s) => sum + s, 0) * 10) / 10;
 
     return {
       studentId: student.id,
@@ -129,7 +142,7 @@ export async function getResultsData(
       practicalTotal,
       projectScores,
       projectTotal,
-      grandTotal: practicalTotal + projectTotal,
+      grandTotal: Math.round((practicalTotal + projectTotal) * 10) / 10,
     };
   });
 

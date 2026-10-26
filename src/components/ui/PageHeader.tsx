@@ -18,9 +18,9 @@ export function PageHeader({
   return (
     <div className="mb-6">
       {breadcrumb && (
-        <div className="mb-3 flex items-center gap-1.5 text-sm text-ink-faint">
+        <div className="mb-3 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-ink-faint">
           {breadcrumb.map((b, i) => (
-            <span key={b.label} className="flex items-center gap-1.5">
+            <span key={b.label} className="flex min-w-0 items-center gap-1.5">
               {i > 0 && <ChevronRight size={13} />}
               {b.href ? (
                 <Link href={b.href} className="hover:text-accent-ink">
@@ -33,20 +33,20 @@ export function PageHeader({
           ))}
         </div>
       )}
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex min-w-0 items-start gap-3">
           <div
-            className="flex h-11 w-11 items-center justify-center rounded-lg"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg sm:h-11 sm:w-11"
             style={{ background: "var(--ink)" }}
           >
             <Icon size={20} className="text-white" strokeWidth={2} />
           </div>
-          <div>
-            <h1 className="text-xl font-semibold text-ink">{title}</h1>
+          <div className="min-w-0">
+            <h1 className="break-words text-lg font-semibold text-ink sm:text-xl">{title}</h1>
             {subtitle && <p className="text-sm text-ink-muted">{subtitle}</p>}
           </div>
         </div>
-        {action}
+        {action && <div className="sm:shrink-0">{action}</div>}
       </div>
     </div>
   );

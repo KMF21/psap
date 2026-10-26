@@ -1,13 +1,14 @@
 import { Users, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getStudentsWithEligibility } from "@/lib/supabase/exams";
+import { getStudentsWithEligibility, getExams } from "@/lib/supabase/exams";
 import { EligibilityForm } from "./EligibilityForm";
 
 export default async function EligibilityPage({ params }: { params: Promise<{ examId: string }> }) {
   const { examId } = await params;
 
   let students: Awaited<ReturnType<typeof getStudentsWithEligibility>>["students"] = [];
+  let otherExams: { id: string; label: string }[] = [];
   let error: string | null = null;
 
   try {
@@ -15,6 +16,10 @@ export default async function EligibilityPage({ params }: { params: Promise<{ ex
     const result = await getStudentsWithEligibility(supabase, examId);
     students = result.students;
     error = result.error;
+    const examsResult = await getExams(supabase);
+    otherExams = examsResult.exams
+      .filter((e) => e.id !== examId)
+      .map((e) => ({ id: e.id, label: `${e.title} (${e.academicSession})` }));
   } catch (e) {
     error = e instanceof Error ? e.message : "Unknown error connecting to the database.";
   }
@@ -49,7 +54,7 @@ export default async function EligibilityPage({ params }: { params: Promise<{ ex
           No students registered yet. Add students first.
         </div>
       ) : (
-        <EligibilityForm examId={examId} students={students} />
+        <EligibilityForm examId={examId} students={students} otherExams={otherExams} />
       )}
     </div>
   );

@@ -24,7 +24,7 @@ export default function ImportStudentsPage() {
         ]}
       />
 
-      <div className="max-w-xl space-y-5 rounded-lg border border-border bg-surface p-6">
+      <div className="max-w-xl space-y-5 rounded-lg border border-border bg-surface p-4 sm:p-6">
         <div className="rounded-md bg-neutral-soft p-4 text-xs text-ink-muted">
           <p className="font-medium text-ink">CSV format</p>
           <p className="mt-1">

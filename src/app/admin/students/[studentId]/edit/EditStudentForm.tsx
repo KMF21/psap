@@ -11,7 +11,7 @@ export function EditStudentForm({ student }: { student: Student }) {
   const [state, formAction, isPending] = useActionState<EditStudentState, FormData>(boundAction, { error: null });
 
   return (
-    <form action={formAction} className="max-w-lg space-y-4 rounded-lg border border-border bg-surface p-6">
+    <form action={formAction} className="max-w-lg space-y-4 rounded-lg border border-border bg-surface p-4 sm:p-6">
       {state.error && (
         <div
           className="flex items-start gap-2 rounded-md p-3 text-sm"

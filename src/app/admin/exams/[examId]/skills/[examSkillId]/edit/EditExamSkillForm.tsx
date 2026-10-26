@@ -11,7 +11,7 @@ export function EditExamSkillForm({ data, csas }: { data: ExamSkillForEdit; csas
   const [state, formAction, isPending] = useActionState<EditExamSkillState, FormData>(boundAction, { error: null });
 
   return (
-    <form action={formAction} className="max-w-xl space-y-5 rounded-lg border border-border bg-surface p-6">
+    <form action={formAction} className="max-w-xl space-y-5 rounded-lg border border-border bg-surface p-4 sm:p-6">
       {state.error && (
         <div
           className="flex items-start gap-2 rounded-md p-3 text-sm"
