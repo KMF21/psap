@@ -608,7 +608,11 @@ $$;
 -- ---------------------------------------------------------------------
 create sequence if not exists skills_skill_number_seq;
 alter table skills add column skill_number integer;
-update skills set skill_number = nextval('skills_skill_number_seq') where skill_number is null;
+-- Existing skills are numbered 1..n in the order they were created (then by name).
+with ordered as (select id, row_number() over (order by created_at, name, id) as n from skills)
+update skills s set skill_number = ordered.n from ordered where ordered.id = s.id;
+select setval('skills_skill_number_seq', greatest((select coalesce(max(skill_number), 0) from skills), 1),
+              (select count(*) > 0 from skills));
 alter table skills
   alter column skill_number set default nextval('skills_skill_number_seq'),
   alter column skill_number set not null,
