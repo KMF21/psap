@@ -1,98 +1,90 @@
-import { LayoutDashboard, AlertTriangle, FolderCheck } from "lucide-react";
+import { LayoutDashboard, AlertTriangle, ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { StatusPill } from "@/components/ui/StatusPill";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getMyAssignments, getMyProjectAssignments } from "@/lib/supabase/scoring";
+import { getMyExams, getMyUserId } from "@/lib/supabase/draws";
 
-function progressStatus(submitted: number, eligible: number) {
-  return eligible > 0 && submitted === eligible ? "submitted" : submitted > 0 ? "draft" : "pending";
-}
+export const dynamic = "force-dynamic";
+
+const statusLabel = { open: "Open", draft: "Not open yet", closed: "Closed" } as const;
+const statusStyle = {
+  open: { background: "var(--success-soft)", color: "var(--success)" },
+  draft: { background: "var(--neutral-soft)", color: "var(--ink-muted)" },
+  closed: { background: "var(--accent-soft)", color: "var(--accent-ink)" },
+} as const;
 
 export default async function CsaDashboard() {
-  const user = await currentUser();
-  const firstName = user?.firstName ?? "there";
-
-  let assignments: Awaited<ReturnType<typeof getMyAssignments>>["assignments"] = [];
-  let projectAssignments: Awaited<ReturnType<typeof getMyProjectAssignments>>["assignments"] = [];
+  const { userId } = await auth();
+  let exams: Awaited<ReturnType<typeof getMyExams>>["exams"] = [];
+  let name = "there";
   let error: string | null = null;
 
   try {
     const supabase = await createServerSupabaseClient();
-    const [skillResult, projectResult] = await Promise.all([getMyAssignments(supabase), getMyProjectAssignments(supabase)]);
-    assignments = skillResult.assignments;
-    error = skillResult.error;
-    projectAssignments = projectResult.assignments;
-    if (!error) error = projectResult.error;
+    const meId = userId ? await getMyUserId(supabase, userId) : null;
+    if (!meId) {
+      error = "Your account isn't set up in the database yet. Ask the Admin.";
+    } else {
+      const { data: me } = await supabase.from("users").select("full_name").eq("id", meId).maybeSingle();
+      name = me?.full_name?.split(" ")[0] ?? name;
+      const result = await getMyExams(supabase, meId);
+      exams = result.exams;
+      error = result.error;
+    }
   } catch (e) {
     error = e instanceof Error ? e.message : "Unknown error connecting to the database.";
   }
 
-  const nothingAssigned = assignments.length === 0 && projectAssignments.length === 0;
-
   return (
     <div>
-      <PageHeader
-        icon={LayoutDashboard}
-        title={`Welcome, ${firstName}`}
-        subtitle="Your assigned skills and scoring progress"
-      />
+      <PageHeader icon={LayoutDashboard} title={`Welcome, ${name}`} subtitle="Your examinations" />
 
       {error ? (
-        <div
-          className="flex items-start gap-3 rounded-lg border p-5 text-sm"
-          style={{ borderColor: "var(--warn)", background: "var(--warn-soft)", color: "var(--warn)" }}
-        >
+        <div className="flex items-start gap-3 rounded-lg border p-5 text-sm" style={{ borderColor: "var(--warn)", background: "var(--warn-soft)", color: "var(--warn)" }}>
           <AlertTriangle size={18} className="mt-0.5 shrink-0" />
           <div>
-            <p className="font-medium">Couldn&apos;t load your assignments.</p>
+            <p className="font-medium">Couldn&apos;t load your examinations.</p>
             <p className="mt-1 opacity-90">{error}</p>
           </div>
         </div>
-      ) : nothingAssigned ? (
+      ) : exams.length === 0 ? (
         <div className="rounded-lg border border-border bg-surface p-10 text-center text-sm text-ink-faint">
-          Nothing assigned to you yet. Check back once an Admin sets up an exam assignment.
+          You haven&apos;t been added to an examination yet. The Admin adds CSAs on each exam&apos;s page.
         </div>
       ) : (
-        <div className="space-y-3">
-          {assignments.map((a) => (
-            <Link
-              key={a.examSkillId}
-              href={`/csa/scoring/${a.examSkillId}`}
-              className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 hover:border-accent sm:flex-row sm:items-center sm:justify-between sm:p-5"
-            >
-              <div>
-                <p className="text-sm font-semibold text-ink">{a.skillName}</p>
-                <p className="mt-1 text-xs text-ink-muted">{a.examTitle} · {a.assignedMarks} marks</p>
-              </div>
-              <div className="flex items-center justify-between gap-4 sm:justify-end">
-                <p className="text-sm tabular text-ink-muted">{a.totalSubmitted} of {a.totalEligible} scored</p>
-                <StatusPill status={progressStatus(a.totalSubmitted, a.totalEligible)} />
-              </div>
-            </Link>
-          ))}
-
-          {projectAssignments.map((a) => (
-            <Link
-              key={a.examId}
-              href={`/csa/project/${a.examId}`}
-              className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 hover:border-accent sm:flex-row sm:items-center sm:justify-between sm:p-5"
-            >
-              <div className="flex items-center gap-2.5">
-                <FolderCheck size={16} className="text-ink-faint" />
-                <div>
-                  <p className="text-sm font-semibold text-ink">Project assessment</p>
-                  <p className="mt-1 text-xs text-ink-muted">{a.examTitle} · {a.maxMarks} marks</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between gap-4 sm:justify-end">
-                <p className="text-sm tabular text-ink-muted">{a.totalSubmitted} of {a.totalEligible} scored</p>
-                <StatusPill status={progressStatus(a.totalSubmitted, a.totalEligible)} />
-              </div>
-            </Link>
-          ))}
-        </div>
+        <ul className="space-y-3">
+          {exams.map((e) => {
+            const pct = e.eligible > 0 ? Math.round((e.practicalComplete / e.eligible) * 100) : 0;
+            return (
+              <li key={e.examId}>
+                <Link href={`/csa/exams/${e.examId}`} className="block rounded-lg border border-border bg-surface p-4 hover:border-accent sm:p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-ink">{e.title}</p>
+                      <p className="mt-0.5 text-xs text-ink-muted">
+                        {e.courseCode} · compulsory + {e.drawsPerStudent} draw{e.drawsPerStudent !== 1 ? "s" : ""}
+                        {e.hasProject ? " · project" : ""}
+                      </p>
+                    </div>
+                    <span className="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium" style={statusStyle[e.status]}>{statusLabel[e.status]}</span>
+                  </div>
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between text-xs text-ink-muted">
+                      <span className="tabular">
+                        Practical {e.practicalComplete}/{e.eligible} done{e.hasProject ? ` · Project ${e.projectComplete}/${e.eligible}` : ""}
+                      </span>
+                      <ChevronRight size={16} className="text-ink-faint" />
+                    </div>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-neutral-soft">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--accent)" }} />
+                    </div>
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

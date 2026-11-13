@@ -129,38 +129,23 @@ export function NewExamForm({ courses, sessions }: { courses: CourseOption[]; se
             Practical + Project
           </label>
         </div>
-        <div className="flex gap-4">
-          <div>
-            <label htmlFor="practicalTargetTotal" className="mb-1 block text-xs text-ink-muted">
-              Practical target total
-            </label>
-            <input
-              id="practicalTargetTotal"
-              name="practicalTargetTotal"
-              type="number"
-              min={1}
-              placeholder="e.g. 100"
-              className="w-32 rounded-md border border-border bg-bg px-3 py-2 text-sm tabular text-ink placeholder:text-ink-faint"
-            />
-          </div>
-          {examType === "practical_and_project" && (
-            <div>
-              <label htmlFor="projectMaxTotal" className="mb-1 block text-xs text-ink-muted">
-                Project max total
-              </label>
-              <input
-                id="projectMaxTotal"
-                name="projectMaxTotal"
-                type="number"
-                min={1}
-                placeholder="e.g. 20"
-                className="w-32 rounded-md border border-border bg-bg px-3 py-2 text-sm tabular text-ink placeholder:text-ink-faint"
-              />
-            </div>
-          )}
+        <div>
+          <label htmlFor="drawsPerStudent" className="mb-1 block text-xs text-ink-muted">
+            Skills each student draws (besides the compulsory skill)
+          </label>
+          <input
+            id="drawsPerStudent"
+            name="drawsPerStudent"
+            type="number"
+            inputMode="numeric"
+            min={0}
+            max={20}
+            defaultValue={3}
+            className="w-28 rounded-md border border-border bg-bg px-3 py-2.5 text-base tabular text-ink sm:text-sm"
+          />
         </div>
         <p className="mt-2 text-xs text-ink-faint">
-          Skills, their mark allocation, and CSA assignment are added on the next screen after the exam is created.
+          On the next screen you add the compulsory skill and the draw pool, choose the CSAs, and (for a project) set the chapters — Chapter 1–5 at 4 marks each to start. Practical and project maxima are worked out automatically.
         </p>
       </div>
 

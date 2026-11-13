@@ -18,3 +18,6 @@ export async function fetchAll<T>(
   }
   return { data: all, error: null };
 }
+
+/** Typed page for queries with embedded joins, whose inferred row shape differs from our own row type. */
+export type Page<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>;

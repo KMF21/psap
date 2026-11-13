@@ -28,13 +28,13 @@ export default async function EligibilityPage({ params }: { params: Promise<{ ex
     <div>
       <PageHeader
         icon={Users}
-        title="Manage eligibility"
-        subtitle="Select which students can be assessed for this examination"
+        title="Student roster"
+        subtitle="Tick students to add them to this exam; untick or use Remove to take them off"
         breadcrumb={[
           { label: "Dashboard", href: "/admin" },
           { label: "Examinations", href: "/admin/exams" },
           { label: "Exam", href: `/admin/exams/${examId}` },
-          { label: "Eligibility" },
+          { label: "Roster" },
         ]}
       />
 

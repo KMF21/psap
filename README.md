@@ -87,3 +87,13 @@ src/
    to invite users by email (rather than expecting self-signup).
 4. Implement bulk student import, Excel/PDF export, and audit log writes.
 5. Deploy to Vercel; point the Clerk webhook at the production URL.
+
+
+## Exam model (migration 009, November 2026)
+
+- **Draw-based practicals.** Each exam has one **compulsory** skill (every student) and a **draw pool**. Each drawn skill has a **paper number** (defaults to the skill's permanent library number). Students draw `draws_per_student` papers (default 3); the same skill can't be drawn twice by one student. All drawn skills share the same allowed marks.
+- **Allowed marks per exam.** `exam_skills.assigned_marks`; scores scale with `scaleScore(raw, nativeTotal, assignedMarks)`. Changing marks after scoring recalculates stored scores in the database and writes an audit entry. Rubrics lock once scored.
+- **CSAs per exam.** `exam_csas` replaces per-skill/per-project assignment. Any CSA on an exam can score any skill or project for any rostered student; the first CSA to open a student + skill holds it (unique per student + skill).
+- **Project chapters.** `exam_project_components` (default Chapter 1–5 at 4 marks) and `project_component_scores`; project total = sum of chapters.
+- **Admin tools.** Reassign a wrong paper number, release a stuck draft, remove a student or skill from an exam, delete an exam (type its title) — all audited, via `admin_*` database functions.
+- **Migrations** live in `supabase/migrations/` from 009 onward (001–008 were applied by hand in the Supabase SQL editor).

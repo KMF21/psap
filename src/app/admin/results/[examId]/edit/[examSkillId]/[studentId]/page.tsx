@@ -7,10 +7,13 @@ import { AdminEditForm } from "./AdminEditForm";
 
 export default async function AdminEditAssessmentPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ examId: string; examSkillId: string; studentId: string }>;
+  searchParams: Promise<{ reassigned?: string }>;
 }) {
   const { examId, examSkillId, studentId } = await params;
+  const { reassigned } = await searchParams;
 
   let data: Awaited<ReturnType<typeof getAssessmentForEdit>>["data"] = null;
   let error: string | null = null;
@@ -42,22 +45,22 @@ export default async function AdminEditAssessmentPage({
     );
   }
 
-  if (!data || !data.assessmentId) notFound();
+  if (!data || !data.assessmentId || data.examId !== examId) notFound();
 
   return (
     <div>
       <PageHeader
         icon={ShieldAlert}
         title={`Correct: ${data.studentName}`}
-        subtitle={`${data.skillName} · ${data.studentRegNumber}`}
+        subtitle={`${data.examTitle} · ${data.studentRegNumber}`}
         breadcrumb={[
           { label: "Dashboard", href: "/admin" },
           { label: "Results", href: "/admin/results" },
-          { label: "Exam", href: `/admin/results/${examId}` },
+          { label: data.examTitle || "Exam", href: `/admin/results/${examId}` },
           { label: "Correct assessment" },
         ]}
       />
-      <AdminEditForm data={data} />
+      <AdminEditForm data={data} justReassigned={reassigned === "1"} />
     </div>
   );
 }

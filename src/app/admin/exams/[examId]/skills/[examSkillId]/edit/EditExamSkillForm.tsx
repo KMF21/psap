@@ -1,72 +1,93 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle } from "lucide-react";
-import type { ExamSkillForEdit, CsaOption } from "@/lib/supabase/exams";
+import { AlertTriangle, RefreshCw } from "lucide-react";
+import type { ExamSkillForEdit } from "@/lib/supabase/exams";
 import { editExamSkillAction, type EditExamSkillState } from "./actions";
 
-export function EditExamSkillForm({ data, csas }: { data: ExamSkillForEdit; csas: CsaOption[] }) {
-  const boundAction = editExamSkillAction.bind(null, data.examId, data.examSkillId);
+export function EditExamSkillForm({ examSkill }: { examSkill: ExamSkillForEdit }) {
+  const boundAction = editExamSkillAction.bind(null, examSkill.examId, examSkill.id);
   const [state, formAction, isPending] = useActionState<EditExamSkillState, FormData>(boundAction, { error: null });
+  const [marks, setMarks] = useState(String(examSkill.assignedMarks));
+
+  const marksChanged = Number(marks) !== examSkill.assignedMarks && Number(marks) > 0;
+  const poolWide = !examSkill.isCompulsory && examSkill.poolSize > 1;
 
   return (
-    <form action={formAction} className="max-w-xl space-y-5 rounded-lg border border-border bg-surface p-4 sm:p-6">
+    <form
+      action={formAction}
+      onSubmit={(e) => {
+        if (marksChanged && examSkill.scoreCount > 0) {
+          const ok = window.confirm(
+            `Change allowed marks from ${examSkill.assignedMarks} to ${marks}?\n\nAll stored scores${poolWide ? " for every drawn skill in this exam" : ""} will be recalculated proportionally, and the change is recorded in the audit log.`,
+          );
+          if (!ok) e.preventDefault();
+        }
+      }}
+      className="max-w-xl space-y-5 rounded-lg border border-border bg-surface p-4 sm:p-6"
+    >
       {state.error && (
-        <div
-          className="flex items-start gap-2 rounded-md p-3 text-sm"
-          style={{ background: "var(--danger-soft)", color: "var(--danger)" }}
-        >
-          <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-          <span>{state.error}</span>
-        </div>
+        <p className="flex items-start gap-2 rounded-md p-3 text-sm" style={{ background: "var(--danger-soft)", color: "var(--danger)" }}>
+          <AlertTriangle size={16} className="mt-0.5 shrink-0" /> {state.error}
+        </p>
       )}
 
-      <div>
-        <label htmlFor="assignedMarks" className="mb-1.5 block text-sm font-medium text-ink">
-          Assigned marks for this exam
-        </label>
-        <input
-          id="assignedMarks"
-          name="assignedMarks"
-          type="number"
-          min={1}
-          defaultValue={data.assignedMarks}
-          className="w-32 rounded-md border border-border bg-bg px-3 py-2 text-sm tabular text-ink"
-        />
+      <div className="rounded-md bg-bg p-3 text-sm">
+        <p className="font-medium text-ink">{examSkill.skillName}</p>
+        <p className="text-xs text-ink-muted">
+          {examSkill.isCompulsory ? "Compulsory skill" : "Draw pool"} · library #{examSkill.skillNumber} · rubric / {examSkill.nativeTotal} ·{" "}
+          {examSkill.scoreCount} scored
+        </p>
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-ink">
-        <input type="checkbox" name="isCompulsory" defaultChecked={data.isCompulsory} />
-        Compulsory skill for this exam
-      </label>
-
-      <div>
-        <p className="mb-1.5 text-sm font-medium text-ink">Assigned CSA(s)</p>
-        {csas.length === 0 ? (
-          <p className="text-xs text-ink-faint">No CSA accounts yet.</p>
-        ) : (
-          <div className="space-y-1.5">
-            {csas.map((c) => (
-              <label key={c.id} className="flex items-center gap-2 text-sm text-ink">
-                <input type="checkbox" name="csaIds" value={c.id} defaultChecked={data.currentCsaIds.includes(c.id)} />
-                {c.fullName}
-              </label>
-            ))}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="assignedMarks" className="mb-1.5 block text-sm font-medium text-ink">Allowed marks</label>
+          <input
+            id="assignedMarks"
+            name="assignedMarks"
+            type="number"
+            inputMode="decimal"
+            min={0.5}
+            step={0.5}
+            required
+            value={marks}
+            onChange={(e) => setMarks(e.target.value)}
+            className="w-32 rounded-md border border-border bg-bg px-3 py-2.5 text-base tabular text-ink sm:text-sm"
+          />
+        </div>
+        {!examSkill.isCompulsory && (
+          <div>
+            <label htmlFor="paperNumber" className="mb-1.5 block text-sm font-medium text-ink">Paper number</label>
+            <input
+              id="paperNumber"
+              name="paperNumber"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              defaultValue={examSkill.paperNumber ?? ""}
+              className="w-28 rounded-md border border-border bg-bg px-3 py-2.5 text-base tabular text-ink sm:text-sm"
+            />
           </div>
         )}
       </div>
 
-      <div className="flex items-center gap-2 border-t border-border pt-5">
-        <button
-          type="submit"
-          disabled={isPending}
-          className="rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
-          style={{ background: "var(--accent)" }}
-        >
+      {marksChanged && (poolWide || examSkill.scoreCount > 0) && (
+        <p className="flex items-start gap-2 rounded-md p-3 text-xs" style={{ background: "var(--warn-soft)", color: "var(--warn)" }}>
+          <RefreshCw size={13} className="mt-0.5 shrink-0" />
+          <span>
+            {poolWide && <>This applies to <strong>all {examSkill.poolSize} drawn skills</strong>, which must share the same marks. </>}
+            {examSkill.scoreCount > 0 && <>Existing scores will be recalculated and the change audited.</>}
+          </span>
+        </p>
+      )}
+
+      <div className="flex flex-col gap-2 border-t border-border pt-5 sm:flex-row">
+        <button type="submit" disabled={isPending} className="rounded-md px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60" style={{ background: "var(--accent)" }}>
           {isPending ? "Saving…" : "Save changes"}
         </button>
-        <Link href={`/admin/exams/${data.examId}`} className="rounded-md border border-border px-4 py-2 text-sm font-medium text-ink hover:bg-bg">
+        <Link href={`/admin/exams/${examSkill.examId}`} className="rounded-md border border-border px-4 py-2.5 text-center text-sm font-medium text-ink hover:bg-bg">
           Cancel
         </Link>
       </div>

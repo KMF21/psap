@@ -1,7 +1,7 @@
 "use client";
 
 import { FileDown, FileSpreadsheet } from "lucide-react";
-import type { ResultsData } from "@/lib/supabase/results";
+import { cellSkillLabel, type ResultsData } from "@/lib/supabase/results";
 
 function csvEscape(value: string | number): string {
   const str = String(value);
@@ -14,21 +14,34 @@ function csvEscape(value: string | number): string {
   return str;
 }
 
+// One row per student. For each slot the export carries the skill the student
+// actually had and its score, so a spreadsheet reader never has to guess.
 function buildHeaders(data: ResultsData): string[] {
-  const headers = ["Registration Number", "Full Name", ...data.skillColumns.map((c) => c.skillName), "Practical Total"];
-  if (data.projectMaxTotal > 0) headers.push("Project Total");
+  const headers = ["Registration Number", "Full Name", "Level"];
+  if (data.compulsory) headers.push(`Compulsory: ${data.compulsory.skillName} (/${data.compulsory.assignedMarks})`);
+  for (let i = 1; i <= data.drawsPerStudent; i++) {
+    headers.push(`Draw ${i} Skill`, `Draw ${i} Score${data.drawnMarks !== null ? ` (/${data.drawnMarks})` : ""}`);
+  }
+  headers.push(`Practical Total (/${data.practicalTargetTotal})`);
+  if (data.hasProject) {
+    for (const c of data.components) headers.push(`${c.name} (/${c.maxMarks})`);
+    headers.push(`Project Total (/${data.projectMaxTotal})`);
+  }
   return headers;
 }
 
 function buildRows(data: ResultsData): (string | number)[][] {
   return data.rows.map((row) => {
-    const cells: (string | number)[] = [
-      row.registrationNumber,
-      row.fullName,
-      ...row.skillScores.map((s) => s ?? ""),
-      row.practicalTotal,
-    ];
-    if (data.projectMaxTotal > 0) cells.push(row.projectTotal);
+    const cells: (string | number)[] = [row.registrationNumber, row.fullName, row.level];
+    if (data.compulsory) cells.push(row.compulsory?.scaledScore ?? "");
+    row.draws.forEach((d) => {
+      cells.push(d ? cellSkillLabel(d) : "", d?.scaledScore ?? "");
+    });
+    cells.push(row.practicalTotal);
+    if (data.hasProject) {
+      row.componentScores.forEach((v) => cells.push(v ?? ""));
+      cells.push(row.projectStatus === "submitted" || row.projectStatus === "amended" ? row.projectTotal : "");
+    }
     return cells;
   });
 }
@@ -62,7 +75,7 @@ export function ExportButtons({ data }: { data: ResultsData }) {
 
     const headHtml = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("");
     const bodyHtml = rows
-      .map((r) => `<tr>${r.map((c, i) => `<td${i > 1 ? ' class="num"' : ""}>${escapeHtml(c === "" ? "—" : c)}</td>`).join("")}</tr>`)
+      .map((r) => `<tr>${r.map((c, i) => `<td${i > 2 && typeof c === "number" ? ' class="num"' : ""}>${escapeHtml(c === "" ? "—" : c)}</td>`).join("")}</tr>`)
       .join("");
 
     win.document.write(`
@@ -75,7 +88,8 @@ export function ExportButtons({ data }: { data: ResultsData }) {
           body { font-family: -apple-system, Segoe UI, Arial, sans-serif; color: #16233D; padding: 24px; }
           h1 { font-size: 16px; margin: 0 0 4px; }
           p.meta { font-size: 11px; color: #5B6472; margin: 0 0 16px; }
-          table { width: 100%; border-collapse: collapse; font-size: 11px; }
+          table { width: 100%; border-collapse: collapse; font-size: 10px; }
+          @page { size: landscape; margin: 12mm; }
           th, td { border: 1px solid #E6E4DF; padding: 6px 8px; text-align: left; }
           th { background: #F2F2F2; font-weight: 600; }
           td.num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -85,7 +99,7 @@ export function ExportButtons({ data }: { data: ResultsData }) {
       <body>
         <div style="margin-bottom:8px"><img src="${window.location.origin}/logo.jpg" alt="" style="height:56px;width:56px;object-fit:contain"></div>
         <h1>${escapeHtml(data.examTitle)}</h1>
-        <p class="meta">Results generated ${new Date().toLocaleDateString()} · Practical: ${data.practicalTargetTotal}${data.projectMaxTotal > 0 ? ` + Project: ${data.projectMaxTotal}` : ""}</p>
+        <p class="meta">${escapeHtml(data.courseCode)} · ${escapeHtml(data.academicSession)} · Generated ${new Date().toLocaleDateString()} · Practical /${data.practicalTargetTotal}${data.hasProject ? ` · Project /${data.projectMaxTotal}` : ""} · Only submitted or corrected scores are shown.</p>
         <table>
           <thead><tr>${headHtml}</tr></thead>
           <tbody>${bodyHtml}</tbody>

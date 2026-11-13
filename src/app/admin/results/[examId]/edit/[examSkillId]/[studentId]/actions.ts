@@ -1,13 +1,17 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { adminUpdateAssessment } from "@/lib/supabase/scoring";
-import { isAdminSession } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
+import { adminContext } from "@/lib/admin-action";
+import { adminReassignAssessment, adminReleaseClaim, adminUpdateAssessment } from "@/lib/supabase/scoring";
 
 export interface AdminEditState {
   error: string | null;
+}
+
+function refresh(examId: string) {
+  revalidatePath(`/admin/results/${examId}`);
+  revalidatePath(`/admin/exams/${examId}/progress`);
 }
 
 export async function adminEditAssessmentAction(
@@ -16,33 +20,34 @@ export async function adminEditAssessmentAction(
   _prevState: AdminEditState,
   formData: FormData,
 ): Promise<AdminEditState> {
-  const { userId } = await auth();
-  if (!userId) return { error: "Not signed in." };
-  if (!(await isAdminSession())) return { error: "Only an Admin can correct scores." };
+  const ctx = await adminContext();
+  if (!ctx.ok) return { error: ctx.error };
 
   const stepScores: Record<string, number> = {};
   for (const [key, value] of formData.entries()) {
-    if (key.startsWith("step_")) {
-      stepScores[key.replace("step_", "")] = Number(value) || 0;
-    }
+    if (key.startsWith("step_") && String(value).trim() !== "") stepScores[key.replace("step_", "")] = Number(value);
   }
+  const { error } = await adminUpdateAssessment(ctx.supabase, { assessmentId, stepScores, adminUserId: ctx.adminUserId });
+  if (error) return { error };
+  refresh(examId);
+  redirect(`/admin/results/${examId}`);
+}
 
-  try {
-    const supabase = await createServerSupabaseClient();
+export async function adminReassignAction(examId: string, assessmentId: string, newExamSkillId: string, studentId: string): Promise<{ error: string | null }> {
+  const ctx = await adminContext();
+  if (!ctx.ok) return { error: ctx.error };
+  if (!newExamSkillId) return { error: "Choose the correct skill." };
+  const { error } = await adminReassignAssessment(ctx.supabase, assessmentId, newExamSkillId);
+  if (error) return { error };
+  refresh(examId);
+  redirect(`/admin/results/${examId}/edit/${newExamSkillId}/${studentId}?reassigned=1`);
+}
 
-    const { data: me, error: meError } = await supabase.from("users").select("id").eq("clerk_user_id", userId).single();
-    if (meError || !me) return { error: "Couldn't identify your account in the database." };
-
-    const { error } = await adminUpdateAssessment(supabase, {
-      assessmentId,
-      stepScores,
-      adminUserId: me.id,
-    });
-
-    if (error) return { error };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Unknown error connecting to the database." };
-  }
-
+export async function adminReleaseAction(examId: string, assessmentId: string): Promise<{ error: string | null }> {
+  const ctx = await adminContext();
+  if (!ctx.ok) return { error: ctx.error };
+  const { error } = await adminReleaseClaim(ctx.supabase, assessmentId);
+  if (error) return { error };
+  refresh(examId);
   redirect(`/admin/results/${examId}`);
 }

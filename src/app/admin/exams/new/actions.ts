@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { adminContext } from "@/lib/admin-action";
 import { findOrCreateCourse, findOrCreateSession, createExam } from "@/lib/supabase/exams";
 
 export interface CreateExamState {
@@ -11,8 +11,7 @@ export interface CreateExamState {
 export async function createExamAction(_prevState: CreateExamState, formData: FormData): Promise<CreateExamState> {
   const title = String(formData.get("title") ?? "").trim();
   const examType = String(formData.get("examType") ?? "practical_only") as "practical_only" | "practical_and_project";
-  const practicalTargetTotal = Number(formData.get("practicalTargetTotal") ?? 0);
-  const projectMaxTotal = examType === "practical_and_project" ? Number(formData.get("projectMaxTotal") ?? 0) : 0;
+  const drawsPerStudent = Number(formData.get("drawsPerStudent") ?? 3);
 
   const courseId = String(formData.get("courseId") ?? "");
   const newCourseCode = String(formData.get("newCourseCode") ?? "").trim();
@@ -22,9 +21,9 @@ export async function createExamAction(_prevState: CreateExamState, formData: Fo
   const newSessionLabel = String(formData.get("newSessionLabel") ?? "").trim();
 
   if (!title) return { error: "Exam title is required." };
-  if (!practicalTargetTotal || practicalTargetTotal <= 0) return { error: "Practical target total must be greater than 0." };
-  if (examType === "practical_and_project" && (!projectMaxTotal || projectMaxTotal <= 0)) {
-    return { error: "Project max total must be greater than 0 for a practical + project exam." };
+  if (examType !== "practical_only" && examType !== "practical_and_project") return { error: "Choose the exam structure." };
+  if (!Number.isInteger(drawsPerStudent) || drawsPerStudent < 0 || drawsPerStudent > 20) {
+    return { error: "Skills drawn per student must be a whole number from 0 to 20." };
   }
   if (!courseId && !newCourseCode) return { error: "Select an existing course or enter a new course code." };
   if (!sessionId && !newSessionLabel) return { error: "Select an existing academic session or enter a new one." };
@@ -32,7 +31,9 @@ export async function createExamAction(_prevState: CreateExamState, formData: Fo
   let examId: string | null = null;
 
   try {
-    const supabase = await createServerSupabaseClient();
+    const ctx = await adminContext();
+    if (!ctx.ok) return { error: ctx.error };
+    const supabase = ctx.supabase;
 
     let finalCourseId = courseId;
     if (!finalCourseId) {
@@ -54,8 +55,7 @@ export async function createExamAction(_prevState: CreateExamState, formData: Fo
       academicSessionId: finalSessionId,
       title,
       examType,
-      practicalTargetTotal,
-      projectMaxTotal,
+      drawsPerStudent,
     });
 
     if (result.error || !result.examId) return { error: result.error ?? "Failed to create exam." };

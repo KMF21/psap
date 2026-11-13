@@ -2,8 +2,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export interface AuditEntry {
   id: string;
-  entityType: "skill_assessment" | "project_assessment";
-  action: "submit" | "admin_edit";
+  entityType: string;
+  action: string;
   actorName: string;
   studentName: string | null;
   contextLabel: string | null; // skill name or "Project assessment"
@@ -14,9 +14,9 @@ export interface AuditEntry {
 
 type RawAuditRow = {
   id: string;
-  entity_type: "skill_assessment" | "project_assessment";
+  entity_type: string;
   entity_id: string;
-  action: "submit" | "admin_edit";
+  action: string;
   previous_value: Record<string, unknown> | null;
   new_value: Record<string, unknown> | null;
   created_at: string;
@@ -70,29 +70,43 @@ export async function getAuditLog(
     }
   }
 
+  // Entries about deleted or restructured records carry their own labels in
+  // the JSON (skill, student, exam…), so they stay readable after the rows go.
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v : null);
   const entries: AuditEntry[] = raw.map((r) => {
+    const prev = r.previous_value ?? {};
+    const next = r.new_value ?? {};
+    let studentName: string | null = null;
+    let contextLabel: string | null = null;
+
     if (r.entity_type === "skill_assessment") {
       const ctx = skillContext.get(r.entity_id);
-      return {
-        id: r.id,
-        entityType: r.entity_type,
-        action: r.action,
-        actorName: r.users?.full_name ?? "Unknown user",
-        studentName: ctx?.studentName ?? null,
-        contextLabel: ctx?.skillName ?? null,
-        previousValue: r.previous_value,
-        newValue: r.new_value,
-        createdAt: r.created_at,
-      };
+      studentName = ctx?.studentName ?? str(prev.student) ?? null;
+      contextLabel =
+        r.action === "reassign"
+          ? `${str(prev.skill) ?? "?"} → ${str(next.skill) ?? "?"}`
+          : ctx?.skillName ?? str(prev.skill) ?? null;
+    } else if (r.entity_type === "project_assessment") {
+      studentName = projectContext.get(r.entity_id)?.studentName ?? null;
+      contextLabel = "Project";
+    } else if (r.entity_type === "exam_skill") {
+      contextLabel = str(prev.skill) ? `${str(prev.exam) ?? ""} · ${str(prev.skill)}` : "Allowed marks";
+    } else if (r.entity_type === "student") {
+      studentName = str(next.student);
+      contextLabel = str(next.exam);
+    } else if (r.entity_type === "exam") {
+      contextLabel = str(prev.title);
+    } else if (r.entity_type === "user") {
+      contextLabel = "CSA name";
     }
-    const ctx = projectContext.get(r.entity_id);
+
     return {
       id: r.id,
       entityType: r.entity_type,
       action: r.action,
       actorName: r.users?.full_name ?? "Unknown user",
-      studentName: ctx?.studentName ?? null,
-      contextLabel: "Project assessment",
+      studentName,
+      contextLabel,
       previousValue: r.previous_value,
       newValue: r.new_value,
       createdAt: r.created_at,

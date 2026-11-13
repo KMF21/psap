@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { adminContext } from "@/lib/admin-action";
 import { createSkillWithSteps } from "@/lib/supabase/skills";
 
 export interface CreateSkillState {
@@ -9,6 +9,8 @@ export interface CreateSkillState {
 }
 
 export async function createSkillAction(_prevState: CreateSkillState, formData: FormData): Promise<CreateSkillState> {
+  const ctx = await adminContext();
+  if (!ctx.ok) return { error: ctx.error };
   const name = String(formData.get("name") ?? "").trim();
   const timeAllowedMinutes = Number(formData.get("timeAllowedMinutes") ?? 10);
 
@@ -31,8 +33,7 @@ export async function createSkillAction(_prevState: CreateSkillState, formData: 
   }
 
   try {
-    const supabase = await createServerSupabaseClient();
-    const { error } = await createSkillWithSteps(supabase, { name, timeAllowedMinutes, steps });
+    const { error } = await createSkillWithSteps(ctx.supabase, { name, timeAllowedMinutes, steps });
 
     if (error) {
       return { error };

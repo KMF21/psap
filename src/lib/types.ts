@@ -28,6 +28,7 @@ export interface SkillStep {
 
 export interface Skill {
   id: string;
+  skillNumber: number;
   name: string;
   nativeTotal: number;
   timeAllowedMinutes: number;
@@ -55,8 +56,8 @@ export interface ExamSkill {
   skillId: string;
   assignedMarks: number;
   isCompulsory: boolean;
+  paperNumber: number | null; // drawn skills only; compulsory has none
   displayOrder: number;
-  assignedCsaIds: string[];
 }
 
 export interface Student {

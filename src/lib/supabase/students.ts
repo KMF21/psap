@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Student } from "@/lib/types";
 
 // Postgres columns are snake_case (matching 001_init.sql); our app types
-// are camelCase (matching mock-data.ts) so pages didn't need to change
+// are camelCase so pages didn't need to change
 // shape when swapping from mock data to real queries. This file is the
 // only place that translates between the two.
 
@@ -222,9 +222,17 @@ export async function getStudentList(supabase: SupabaseClient, query: StudentLis
 // ---------------- Student history: every exam a student sat ----------------
 
 export interface StudentHistorySkill {
+  slot: string; // "Compulsory" or "Draw 1".."Draw N"
   skillName: string;
+  paperNumber: number | null;
   assignedMarks: number;
-  score: number | null; // null = not scored / still draft
+  score: number | null; // null = not scored yet / still a draft
+}
+
+export interface StudentHistoryChapter {
+  name: string;
+  maxMarks: number;
+  score: number | null;
 }
 
 export interface StudentHistoryExam {
@@ -236,9 +244,11 @@ export interface StudentHistoryExam {
   skills: StudentHistorySkill[];
   practicalTotal: number;
   practicalMax: number;
-  projectScores: number[];
+  hasProject: boolean;
+  chapters: StudentHistoryChapter[];
   projectMax: number;
   projectTotal: number;
+  projectScored: boolean;
 }
 
 export async function getStudentHistory(
@@ -252,7 +262,7 @@ export async function getStudentHistory(
   const { data: eligRows, error: eligError } = await supabase
     .from("exam_eligibility")
     .select(
-      "exams(id, title, status, practical_target_total, project_max_total, created_at, courses(code), academic_sessions(label), exam_skills(id, assigned_marks, display_order, skills(name)))",
+      "exams(id, title, status, exam_type, draws_per_student, practical_target_total, project_max_total, created_at, courses(code), academic_sessions(label), exam_skills(id, assigned_marks, is_compulsory, paper_number, skills(name)), exam_project_components(id, name, max_marks, display_order))",
     )
     .eq("student_id", studentId);
   if (eligError) return { student, exams: [], error: eligError.message };
@@ -261,12 +271,15 @@ export async function getStudentHistory(
     id: string;
     title: string;
     status: "draft" | "open" | "closed";
+    exam_type: string;
+    draws_per_student: number;
     practical_target_total: number;
     project_max_total: number;
     created_at: string;
     courses: { code: string } | null;
     academic_sessions: { label: string } | null;
-    exam_skills: { id: string; assigned_marks: number; display_order: number | null; skills: { name: string } | null }[];
+    exam_skills: { id: string; assigned_marks: number; is_compulsory: boolean; paper_number: number | null; skills: { name: string } | null }[];
+    exam_project_components: { id: string; name: string; max_marks: number; display_order: number }[];
   };
   const examList = ((eligRows ?? []) as unknown as { exams: ExamRow | null }[])
     .map((r) => r.exams)
@@ -276,38 +289,46 @@ export async function getStudentHistory(
   const [{ data: skillRows, error: skillError }, { data: projectRows, error: projectError }] = await Promise.all([
     supabase
       .from("skill_assessments")
-      .select("exam_skill_id, scaled_score")
-      .eq("student_id", studentId)
-      .in("status", ["submitted", "amended"]),
+      .select("exam_skill_id, scaled_score, status, draw_order")
+      .eq("student_id", studentId),
     supabase
       .from("project_assessments")
-      .select("exam_id, score")
-      .eq("student_id", studentId)
-      .in("status", ["submitted", "amended"]),
+      .select("exam_id, status, project_component_scores(component_id, score)")
+      .eq("student_id", studentId),
   ]);
   if (skillError || projectError) return { student, exams: [], error: (skillError ?? projectError)!.message };
 
-  const scoreByExamSkill = new Map<string, number>();
-  for (const r of (skillRows ?? []) as { exam_skill_id: string; scaled_score: number | null }[]) {
-    if (r.scaled_score !== null && !scoreByExamSkill.has(r.exam_skill_id)) scoreByExamSkill.set(r.exam_skill_id, Number(r.scaled_score));
-  }
-  const projectByExam = new Map<string, number[]>();
-  for (const r of (projectRows ?? []) as { exam_id: string; score: number | null }[]) {
-    if (r.score === null) continue;
-    projectByExam.set(r.exam_id, [...(projectByExam.get(r.exam_id) ?? []), Number(r.score)]);
-  }
+  const counts = (status: string) => status === "submitted" || status === "amended";
+  type SkillAssessmentRow = { exam_skill_id: string; scaled_score: number | null; status: string; draw_order: number | null };
+  const assessmentByExamSkill = new Map<string, SkillAssessmentRow>();
+  for (const r of (skillRows ?? []) as SkillAssessmentRow[]) assessmentByExamSkill.set(r.exam_skill_id, r);
+  type ProjectRow = { exam_id: string; status: string; project_component_scores: { component_id: string; score: number }[] };
+  const projectByExam = new Map(((projectRows ?? []) as unknown as ProjectRow[]).map((p) => [p.exam_id, p]));
 
   const exams: StudentHistoryExam[] = examList.map((e) => {
-    const skills = [...e.exam_skills]
-      .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0))
-      .map((es) => ({
-        skillName: es.skills?.name ?? "Unknown skill",
-        assignedMarks: Number(es.assigned_marks),
-        score: scoreByExamSkill.get(es.id) ?? null,
-      }));
+    const recorded = e.exam_skills
+      .map((es) => ({ es, a: assessmentByExamSkill.get(es.id) }))
+      .filter((x): x is { es: ExamRow["exam_skills"][number]; a: SkillAssessmentRow } => x.a !== undefined);
+    const comp = recorded.find((x) => x.es.is_compulsory);
+    const draws = recorded.filter((x) => !x.es.is_compulsory).sort((a, b) => (a.a.draw_order ?? 99) - (b.a.draw_order ?? 99));
+    const toSkill = (x: (typeof recorded)[number], slot: string): StudentHistorySkill => ({
+      slot,
+      skillName: x.es.skills?.name ?? "Unknown skill",
+      paperNumber: x.es.paper_number,
+      assignedMarks: Number(x.es.assigned_marks),
+      score: counts(x.a.status) && x.a.scaled_score !== null ? Number(x.a.scaled_score) : null,
+    });
+    const skills = [...(comp ? [toSkill(comp, "Compulsory")] : []), ...draws.map((d, i) => toSkill(d, `Draw ${i + 1}`))];
     const practicalTotal = Math.round(skills.reduce((s, k) => s + (k.score ?? 0), 0) * 10) / 10;
-    const projectScores = projectByExam.get(e.id) ?? [];
-    const projectTotal = projectScores.reduce((s, v) => s + v, 0);
+
+    const project = projectByExam.get(e.id);
+    const projectScored = project ? counts(project.status) : false;
+    const scoreByComp = new Map((project?.project_component_scores ?? []).map((c) => [c.component_id, Number(c.score)]));
+    const chapters = [...e.exam_project_components]
+      .sort((a, b) => a.display_order - b.display_order)
+      .map((c) => ({ name: c.name, maxMarks: Number(c.max_marks), score: projectScored && scoreByComp.has(c.id) ? scoreByComp.get(c.id)! : null }));
+    const projectTotal = Math.round(chapters.reduce((s, c) => s + (c.score ?? 0), 0) * 10) / 10;
+
     return {
       examId: e.id,
       title: e.title,
@@ -317,9 +338,11 @@ export async function getStudentHistory(
       skills,
       practicalTotal,
       practicalMax: Number(e.practical_target_total),
-      projectScores,
+      hasProject: e.exam_type === "practical_and_project",
+      chapters,
       projectMax: Number(e.project_max_total),
       projectTotal,
+      projectScored,
     };
   });
 

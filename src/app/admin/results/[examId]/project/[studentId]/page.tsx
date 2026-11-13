@@ -2,17 +2,18 @@ import { ShieldAlert } from "lucide-react";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getProjectAssessmentsForEdit } from "@/lib/supabase/scoring";
+import { getProjectForAdminEdit } from "@/lib/supabase/scoring";
 import { ProjectEditForm } from "./ProjectEditForm";
 
 export default async function AdminEditProjectPage({ params }: { params: Promise<{ examId: string; studentId: string }> }) {
   const { examId, studentId } = await params;
 
-  let result: Awaited<ReturnType<typeof getProjectAssessmentsForEdit>> | null = null;
+  let data: Awaited<ReturnType<typeof getProjectForAdminEdit>>["data"] = null;
   let error: string | null = null;
   try {
     const supabase = await createServerSupabaseClient();
-    result = await getProjectAssessmentsForEdit(supabase, examId, studentId);
+    const result = await getProjectForAdminEdit(supabase, examId, studentId);
+    data = result.data;
     error = result.error;
   } catch (e) {
     error = e instanceof Error ? e.message : "Unknown error connecting to the database.";
@@ -21,27 +22,31 @@ export default async function AdminEditProjectPage({ params }: { params: Promise
   if (error) {
     return (
       <div>
-        <PageHeader icon={ShieldAlert} title="Correct project score" breadcrumb={[{ label: "Dashboard", href: "/admin" }, { label: "Results", href: "/admin/results" }]} />
-        <p className="text-sm" style={{ color: "var(--danger)" }}>Couldn&apos;t load this project score: {error}</p>
+        <PageHeader icon={ShieldAlert} title="Project scores" breadcrumb={[{ label: "Dashboard", href: "/admin" }, { label: "Results", href: "/admin/results" }]} />
+        <p className="text-sm" style={{ color: "var(--danger)" }}>Couldn&apos;t load this project: {error}</p>
       </div>
     );
   }
-  if (!result || !result.studentName || result.rows.length === 0) notFound();
+  if (!data) notFound();
 
   return (
     <div>
       <PageHeader
         icon={ShieldAlert}
-        title={`Correct project score: ${result.studentName}`}
-        subtitle={`${result.examTitle ?? "Examination"} · ${result.studentRegNumber ?? ""}`}
+        title={`Project: ${data.studentName}`}
+        subtitle={`${data.examTitle} · ${data.studentRegNumber}`}
         breadcrumb={[
           { label: "Dashboard", href: "/admin" },
           { label: "Results", href: "/admin/results" },
-          { label: "Exam", href: `/admin/results/${examId}` },
-          { label: "Correct project score" },
+          { label: data.examTitle, href: `/admin/results/${examId}` },
+          { label: "Project" },
         ]}
       />
-      <ProjectEditForm examId={examId} studentId={studentId} rows={result.rows} />
+      {data.components.length === 0 ? (
+        <p className="text-sm text-ink-muted">This exam has no project chapters yet. Add them on the exam page.</p>
+      ) : (
+        <ProjectEditForm examId={examId} studentId={studentId} data={data} />
+      )}
     </div>
   );
 }

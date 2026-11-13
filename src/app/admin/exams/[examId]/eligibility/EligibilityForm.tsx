@@ -2,9 +2,9 @@
 
 import { useActionState, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { Search, AlertTriangle, Copy } from "lucide-react";
+import { Search, AlertTriangle, Copy, UserMinus } from "lucide-react";
 import type { StudentEligibilityRow } from "@/lib/supabase/exams";
-import { saveEligibilityAction, getEligibleIdsAction, type EligibilityState } from "./actions";
+import { saveEligibilityAction, getEligibleIdsAction, removeStudentAction, type EligibilityState } from "./actions";
 
 export function EligibilityForm({
   examId,
@@ -20,6 +20,10 @@ export function EligibilityForm({
 
   const [query, setQuery] = useState("");
   const [level, setLevel] = useState("");
+  const [onlyRoster, setOnlyRoster] = useState(students.some((s) => s.isEligible));
+  const [rows, setRows] = useState(students);
+  const [removing, startRemove] = useTransition();
+  const [rowError, setRowError] = useState<string | null>(null);
   const [sourceExam, setSourceExam] = useState("");
   const [copyNote, setCopyNote] = useState<string | null>(null);
   const [copying, startCopy] = useTransition();
@@ -28,13 +32,14 @@ export function EligibilityForm({
 
   const filtered = useMemo(
     () =>
-      students.filter(
+      rows.filter(
         (s) =>
+          (!onlyRoster || s.isEligible || selected.has(s.id)) &&
           (!level || s.level === level) &&
           (s.fullName.toLowerCase().includes(query.toLowerCase()) ||
             s.registrationNumber.toLowerCase().includes(query.toLowerCase())),
       ),
-    [students, query, level],
+    [rows, query, level, onlyRoster, selected],
   );
 
   function toggle(id: string) {
@@ -43,6 +48,28 @@ export function EligibilityForm({
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
+    });
+  }
+
+  function removeNow(s: StudentEligibilityRow) {
+    const warning =
+      s.scoreCount > 0
+        ? `Remove ${s.fullName} from this exam?\n\nTheir ${s.scoreCount} score${s.scoreCount > 1 ? "s" : ""} in this exam will be DELETED. This is recorded in the audit log but cannot be undone.`
+        : `Remove ${s.fullName} from this exam?`;
+    if (!window.confirm(warning)) return;
+    setRowError(null);
+    startRemove(async () => {
+      const result = await removeStudentAction(examId, s.id);
+      if (result.error) {
+        setRowError(result.error);
+        return;
+      }
+      setRows((prev) => prev.map((r) => (r.id === s.id ? { ...r, isEligible: false, scoreCount: 0 } : r)));
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(s.id);
+        return next;
+      });
     });
   }
 
@@ -79,14 +106,30 @@ export function EligibilityForm({
   }
 
   return (
-    <form action={formAction} className="rounded-lg border border-border bg-surface">
-      {state.error && (
+    <form
+      action={formAction}
+      onSubmit={(e) => {
+        const dropped = rows.filter((r) => r.isEligible && !selected.has(r.id));
+        const scored = dropped.filter((r) => r.scoreCount > 0);
+        if (dropped.length === 0) return;
+        const msg =
+          `${dropped.length} student${dropped.length > 1 ? "s" : ""} will be removed from this exam.` +
+          (scored.length > 0
+            ? `\n\n${scored.length} of them already ha${scored.length > 1 ? "ve" : "s"} scores, which will be DELETED (recorded in the audit log):\n` +
+              scored.slice(0, 8).map((r) => `• ${r.fullName}`).join("\n") +
+              (scored.length > 8 ? `\n…and ${scored.length - 8} more` : "")
+            : "");
+        if (!window.confirm(msg)) e.preventDefault();
+      }}
+      className="rounded-lg border border-border bg-surface"
+    >
+      {(state.error || rowError) && (
         <div
           className="flex items-start gap-2 border-b border-border p-4 text-sm"
           style={{ background: "var(--danger-soft)", color: "var(--danger)" }}
         >
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-          <span>{state.error}</span>
+          <span>{state.error ?? rowError}</span>
         </div>
       )}
 
@@ -150,6 +193,10 @@ export function EligibilityForm({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <label className="flex items-center gap-2 text-xs text-ink-muted">
+            <input type="checkbox" checked={onlyRoster} onChange={(e) => setOnlyRoster(e.target.checked)} />
+            Only students on this exam
+          </label>
           <p className="text-xs text-ink-faint">{selected.size} of {students.length} selected</p>
           <button type="button" onClick={selectAllFiltered} className="text-xs font-medium text-accent-ink hover:underline">
             Select all shown
@@ -175,8 +222,25 @@ export function EligibilityForm({
                 />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm text-ink">{s.fullName}</p>
-                  <p className="text-xs tabular text-ink-faint">{s.registrationNumber} · {s.level}</p>
+                  <p className="text-xs tabular text-ink-faint">
+                    {s.registrationNumber} · {s.level}
+                    {s.scoreCount > 0 && <span className="ml-1.5 font-medium" style={{ color: "var(--accent-ink)" }}>· {s.scoreCount} scored</span>}
+                  </p>
                 </div>
+                {s.isEligible && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      removeNow(s);
+                    }}
+                    disabled={removing}
+                    className="flex shrink-0 items-center gap-1 rounded-md px-2 py-2 text-xs font-medium text-ink-muted hover:bg-bg hover:text-danger disabled:opacity-50"
+                    aria-label={`Remove ${s.fullName} from this exam`}
+                  >
+                    <UserMinus size={14} /> <span className="hidden sm:inline">Remove</span>
+                  </button>
+                )}
               </label>
             </li>
           ))
@@ -190,7 +254,7 @@ export function EligibilityForm({
           className="rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-60"
           style={{ background: "var(--accent)" }}
         >
-          {isPending ? "Saving…" : "Save eligibility"}
+          {isPending ? "Saving…" : "Save roster"}
         </button>
         <Link href={`/admin/exams/${examId}`} className="rounded-md border border-border px-4 py-2 text-sm font-medium text-ink hover:bg-bg">
           Cancel

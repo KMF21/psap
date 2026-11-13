@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getExams, type ExamListItem } from "./exams";
+import { fetchAll } from "./paging";
 
 export interface DashboardStats {
   totalStudents: number;
@@ -32,24 +33,25 @@ export async function getDashboardData(
     return { stats: { totalStudents: 0, activeExams: 0, totalExams: 0, totalSubmitted: 0, totalAwaiting: 0 }, exams: [], error: submittedError.message };
   }
 
-  // "Awaiting" = eligible-student × exam-skill pairs that don't yet have a
-  // submitted assessment — not just existing draft rows, since a student who
-  // hasn't been scored at all yet (no row at all) is just as much "awaiting"
-  // as one sitting in draft. Computed per exam_skill, same N+1 pattern as
-  // getMyAssignments — fine at this app's scale (a handful of exam_skills).
-  const { data: examSkillRows, error: esError } = await supabase.from("exam_skills").select("id, exam_id");
-  if (esError) {
-    return { stats: { totalStudents: 0, activeExams: 0, totalExams: 0, totalSubmitted: 0, totalAwaiting: 0 }, exams: [], error: esError.message };
+  // "Awaiting" = practical slots still to be submitted across all exams:
+  // each eligible student needs the compulsory skill (if set) plus N draws.
+  const [{ data: examRows, error: exError }, { data: compRows, error: compError }, { data: eligRows, error: eligError }] = await Promise.all([
+    supabase.from("exams").select("id, draws_per_student"),
+    supabase.from("exam_skills").select("exam_id").eq("is_compulsory", true),
+    fetchAll<{ exam_id: string }>((from, to) => supabase.from("exam_eligibility").select("exam_id").order("id").range(from, to)),
+  ]);
+  const firstError = exError?.message ?? compError?.message ?? eligError;
+  if (firstError) {
+    return { stats: { totalStudents: 0, activeExams: 0, totalExams: 0, totalSubmitted: 0, totalAwaiting: 0 }, exams: [], error: firstError };
   }
-
-  let totalAwaiting = 0;
-  for (const es of examSkillRows ?? []) {
-    const [{ count: eligible }, { count: submitted }] = await Promise.all([
-      supabase.from("exam_eligibility").select("*", { count: "exact", head: true }).eq("exam_id", es.exam_id),
-      supabase.from("skill_assessments").select("*", { count: "exact", head: true }).eq("exam_skill_id", es.id).in("status", ["submitted", "amended"]),
-    ]);
-    totalAwaiting += Math.max((eligible ?? 0) - (submitted ?? 0), 0);
+  const hasCompulsory = new Set((compRows ?? []).map((r) => r.exam_id as string));
+  const eligibleByExam = new Map<string, number>();
+  for (const r of eligRows) eligibleByExam.set(r.exam_id, (eligibleByExam.get(r.exam_id) ?? 0) + 1);
+  let slotsNeeded = 0;
+  for (const e of examRows ?? []) {
+    slotsNeeded += (eligibleByExam.get(e.id) ?? 0) * ((hasCompulsory.has(e.id) ? 1 : 0) + Number(e.draws_per_student ?? 0));
   }
+  const totalAwaiting = Math.max(slotsNeeded - (totalSubmitted ?? 0), 0);
 
   return {
     stats: {

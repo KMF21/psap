@@ -1,10 +1,31 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { fetchAll } from "./paging";
+import { fetchAll, type Page } from "./paging";
 
-export interface ResultsSkillColumn {
+/**
+ * Results for a draw-based exam. Each student is assessed on the compulsory
+ * skill plus the N skills they drew, so instead of one column per skill the
+ * table shows "Compulsory" and "Draw 1..N" slots, each naming the skill that
+ * student actually had. Only submitted or Admin-corrected (amended) scores
+ * count towards totals; drafts appear as "in progress".
+ */
+
+export type CellStatus = "draft" | "submitted" | "amended";
+
+export interface ResultCell {
+  assessmentId: string;
   examSkillId: string;
   skillName: string;
+  paperNumber: number | null;
   assignedMarks: number;
+  status: CellStatus;
+  scaledScore: number | null; // null while in draft
+  csaName: string;
+}
+
+export interface ResultsComponent {
+  id: string;
+  name: string;
+  maxMarks: number;
 }
 
 export interface ResultsRow {
@@ -12,26 +33,65 @@ export interface ResultsRow {
   registrationNumber: string;
   fullName: string;
   level: string;
-  skillScores: (number | null)[]; // aligned to skillColumns, by index
+  compulsory: ResultCell | null;
+  draws: (ResultCell | null)[]; // length N, by draw order
+  extraDraws: ResultCell[]; // only if N was lowered after scoring — shown, never hidden
   practicalTotal: number;
-  projectScores: number[]; // one per submitted project-assessing CSA
+  practicalComplete: boolean;
+  componentScores: (number | null)[]; // aligned to components
   projectTotal: number;
+  projectStatus: CellStatus | null;
+  projectCsaName: string | null;
 }
 
 export interface ResultsData {
+  examId: string;
   examTitle: string;
   academicSession: string;
+  courseCode: string;
+  status: "draft" | "open" | "closed";
+  drawsPerStudent: number;
   practicalTargetTotal: number;
   projectMaxTotal: number;
-  skillColumns: ResultsSkillColumn[];
+  hasProject: boolean;
+  compulsory: { examSkillId: string; skillName: string; assignedMarks: number } | null;
+  drawnMarks: number | null;
+  components: ResultsComponent[];
   rows: ResultsRow[];
 }
 
-type ExamRow = { title: string; practical_target_total: number; project_max_total: number; academic_sessions: { label: string } | null };
-type ExamSkillRow = { id: string; assigned_marks: number; skills: { name: string } | null };
+type ExamRow = {
+  id: string;
+  title: string;
+  status: "draft" | "open" | "closed";
+  exam_type: string;
+  draws_per_student: number;
+  practical_target_total: number;
+  project_max_total: number;
+  academic_sessions: { label: string } | null;
+  courses: { code: string } | null;
+};
+type ExamSkillRow = { id: string; assigned_marks: number; is_compulsory: boolean; paper_number: number | null; skills: { name: string } | null };
 type StudentRow = { id: string; registration_number: string; full_name: string; level: string | null };
-type SkillAssessmentRow = { id?: string; exam_skill_id: string; student_id: string; scaled_score: number | null; status: string };
-type ProjectAssessmentRow = { id?: string; student_id: string; score: number | null; status: string };
+type AssessmentRow = {
+  id: string;
+  exam_skill_id: string;
+  student_id: string;
+  scaled_score: number | null;
+  status: CellStatus;
+  draw_order: number | null;
+  users: { full_name: string } | null;
+};
+type ProjectRow = {
+  id: string;
+  student_id: string;
+  status: CellStatus;
+  users: { full_name: string } | null;
+  project_component_scores: { component_id: string; score: number }[];
+};
+
+const counts = (s: CellStatus) => s === "submitted" || s === "amended";
+const round1 = (n: number) => Math.round(n * 10) / 10;
 
 export async function getResultsData(
   supabase: SupabaseClient,
@@ -39,31 +99,27 @@ export async function getResultsData(
 ): Promise<{ data: ResultsData | null; error: string | null }> {
   const { data: examRow, error: examError } = await supabase
     .from("exams")
-    .select("title, practical_target_total, project_max_total, academic_sessions(label)")
+    .select("id, title, status, exam_type, draws_per_student, practical_target_total, project_max_total, academic_sessions(label), courses(code)")
     .eq("id", examId)
     .maybeSingle();
-
   if (examError) return { data: null, error: examError.message };
   if (!examRow) return { data: null, error: null };
-
   const exam = examRow as unknown as ExamRow;
 
-  const { data: examSkillRows, error: esError } = await supabase
-    .from("exam_skills")
-    .select("id, assigned_marks, skills(name)")
-    .eq("exam_id", examId)
-    .order("display_order", { ascending: true });
-
+  const [{ data: esRows, error: esError }, { data: compRows, error: compError }] = await Promise.all([
+    supabase.from("exam_skills").select("id, assigned_marks, is_compulsory, paper_number, skills(name)").eq("exam_id", examId),
+    supabase.from("exam_project_components").select("id, name, max_marks, display_order").eq("exam_id", examId).order("display_order"),
+  ]);
   if (esError) return { data: null, error: esError.message };
+  if (compError) return { data: null, error: compError.message };
 
-  const skillColumns: ResultsSkillColumn[] = ((examSkillRows ?? []) as unknown as ExamSkillRow[]).map((row) => ({
-    examSkillId: row.id,
-    skillName: row.skills?.name ?? "Unknown skill",
-    assignedMarks: row.assigned_marks,
-  }));
-  const examSkillIds = skillColumns.map((c) => c.examSkillId);
+  const examSkills = (esRows ?? []) as unknown as ExamSkillRow[];
+  const skillById = new Map(examSkills.map((s) => [s.id, s]));
+  const compulsorySkill = examSkills.find((s) => s.is_compulsory) ?? null;
+  const drawn = examSkills.filter((s) => !s.is_compulsory);
+  const components: ResultsComponent[] = (compRows ?? []).map((c) => ({ id: c.id, name: c.name, maxMarks: Number(c.max_marks) }));
 
-  const { data: studentRows, error: studentsError } = await fetchAll<StudentRow>((from, to) =>
+  const { data: students, error: studentsError } = await fetchAll<StudentRow>((from, to) =>
     supabase
       .from("students")
       .select("id, registration_number, full_name, level, exam_eligibility!inner(exam_id)")
@@ -72,87 +128,115 @@ export async function getResultsData(
       .order("id", { ascending: true })
       .range(from, to),
   );
-
   if (studentsError) return { data: null, error: studentsError };
 
-  // Only SUBMITTED scores count toward results — a draft in progress isn't
-  // official yet. Admin sees every CSA's submissions here (unlike a CSA's
-  // own scoped view), via the admin_all_skill_assessments RLS policy.
-  const { data: assessmentRows, error: assessmentsError } =
+  const examSkillIds = examSkills.map((s) => s.id);
+  const { data: assessments, error: aError } =
     examSkillIds.length > 0
-      ? await fetchAll<SkillAssessmentRow>((from, to) =>
+      ? await fetchAll<AssessmentRow>((from, to) =>
           supabase
             .from("skill_assessments")
-            .select("id, exam_skill_id, student_id, scaled_score, status")
+            .select("id, exam_skill_id, student_id, scaled_score, status, draw_order, users(full_name)")
             .in("exam_skill_id", examSkillIds)
-            .in("status", ["submitted", "amended"])
             .order("id", { ascending: true })
-            .range(from, to),
+            .range(from, to) as unknown as Page<AssessmentRow>,
         )
-      : { data: [] as SkillAssessmentRow[], error: null };
+      : { data: [] as AssessmentRow[], error: null };
+  if (aError) return { data: null, error: aError };
 
-  if (assessmentsError) return { data: null, error: assessmentsError };
+  const hasProject = exam.exam_type === "practical_and_project";
+  const { data: projects, error: pError } = hasProject
+    ? await fetchAll<ProjectRow>((from, to) =>
+        supabase
+          .from("project_assessments")
+          .select("id, student_id, status, users(full_name), project_component_scores(component_id, score)")
+          .eq("exam_id", examId)
+          .order("id", { ascending: true })
+          .range(from, to) as unknown as Page<ProjectRow>,
+      )
+    : { data: [] as ProjectRow[], error: null };
+  if (pError) return { data: null, error: pError };
 
-  // Keyed by "examSkillId::studentId". The spec's model is one CSA per
-  // skill; if more than one submitted row exists for the same pair (a
-  // multi-CSA-per-skill setup, which the schema technically allows but the
-  // spec doesn't define scoring rules for), the first one found wins rather
-  // than silently double-counting.
-  const skillScoreMap = new Map<string, number>();
-  for (const row of (assessmentRows ?? []) as unknown as SkillAssessmentRow[]) {
-    const key = `${row.exam_skill_id}::${row.student_id}`;
-    if (!skillScoreMap.has(key) && row.scaled_score !== null) {
-      skillScoreMap.set(key, row.scaled_score);
-    }
-  }
+  const byStudent = new Map<string, AssessmentRow[]>();
+  for (const a of assessments) byStudent.set(a.student_id, [...(byStudent.get(a.student_id) ?? []), a]);
+  const projectByStudent = new Map(projects.map((p) => [p.student_id, p]));
+  const n = exam.draws_per_student;
 
-  const { data: projectRows, error: projectError } = await fetchAll<ProjectAssessmentRow>((from, to) =>
-    supabase
-      .from("project_assessments")
-      .select("id, student_id, score, status")
-      .eq("exam_id", examId)
-      .in("status", ["submitted", "amended"])
-      .order("id", { ascending: true })
-      .range(from, to),
-  );
+  const toCell = (a: AssessmentRow): ResultCell => {
+    const es = skillById.get(a.exam_skill_id);
+    return {
+      assessmentId: a.id,
+      examSkillId: a.exam_skill_id,
+      skillName: es?.skills?.name ?? "Unknown skill",
+      paperNumber: es?.paper_number ?? null,
+      assignedMarks: Number(es?.assigned_marks ?? 0),
+      status: a.status,
+      scaledScore: counts(a.status) && a.scaled_score !== null ? Number(a.scaled_score) : null,
+      csaName: a.users?.full_name ?? "—",
+    };
+  };
 
-  if (projectError) return { data: null, error: projectError };
+  const rows: ResultsRow[] = students.map((s) => {
+    const mine = byStudent.get(s.id) ?? [];
+    const compRow = mine.find((a) => skillById.get(a.exam_skill_id)?.is_compulsory);
+    const drawRows = mine
+      .filter((a) => !skillById.get(a.exam_skill_id)?.is_compulsory)
+      .sort((a, b) => (a.draw_order ?? 99) - (b.draw_order ?? 99));
+    const draws: (ResultCell | null)[] = Array.from({ length: n }, (_, i) => (drawRows[i] ? toCell(drawRows[i]) : null));
+    const extraDraws = drawRows.slice(n).map(toCell);
 
-  const projectScoresByStudent = new Map<string, number[]>();
-  for (const row of (projectRows ?? []) as unknown as ProjectAssessmentRow[]) {
-    if (row.score === null) continue;
-    const existing = projectScoresByStudent.get(row.student_id) ?? [];
-    existing.push(row.score);
-    projectScoresByStudent.set(row.student_id, existing);
-  }
+    const compulsory = compRow ? toCell(compRow) : null;
+    const allCells = [compulsory, ...draws, ...extraDraws].filter((c): c is ResultCell => c !== null);
+    const practicalTotal = round1(allCells.reduce((sum, c) => sum + (c.scaledScore ?? 0), 0));
+    const doneCount = allCells.filter((c) => c.scaledScore !== null).length;
+    const practicalComplete = doneCount >= (compulsorySkill ? 1 : 0) + n;
 
-  const rows: ResultsRow[] = ((studentRows ?? []) as unknown as StudentRow[]).map((student) => {
-    const skillScores = skillColumns.map((col) => skillScoreMap.get(`${col.examSkillId}::${student.id}`) ?? null);
-    const practicalTotal = Math.round(skillScores.reduce((sum: number, s) => sum + (s ?? 0), 0) * 10) / 10;
-    const projectScores = projectScoresByStudent.get(student.id) ?? [];
-    const projectTotal = Math.round(projectScores.reduce((sum, s) => sum + s, 0) * 10) / 10;
+    const project = projectByStudent.get(s.id);
+    const projectCounts = project ? counts(project.status) : false;
+    const scoreByComp = new Map((project?.project_component_scores ?? []).map((c) => [c.component_id, Number(c.score)]));
+    const componentScores = components.map((c) => (projectCounts && scoreByComp.has(c.id) ? scoreByComp.get(c.id)! : null));
+    const projectTotal = round1(componentScores.reduce((sum: number, v) => sum + (v ?? 0), 0));
 
     return {
-      studentId: student.id,
-      registrationNumber: student.registration_number,
-      fullName: student.full_name,
-      level: student.level ?? "",
-      skillScores,
+      studentId: s.id,
+      registrationNumber: s.registration_number,
+      fullName: s.full_name,
+      level: s.level ?? "",
+      compulsory,
+      draws,
+      extraDraws,
       practicalTotal,
-      projectScores,
+      practicalComplete,
+      componentScores,
       projectTotal,
+      projectStatus: project?.status ?? null,
+      projectCsaName: project?.users?.full_name ?? null,
     };
   });
 
   return {
     data: {
+      examId: exam.id,
       examTitle: exam.title,
       academicSession: exam.academic_sessions?.label ?? "—",
-      practicalTargetTotal: exam.practical_target_total,
-      projectMaxTotal: exam.project_max_total,
-      skillColumns,
+      courseCode: exam.courses?.code ?? "—",
+      status: exam.status,
+      drawsPerStudent: n,
+      practicalTargetTotal: Number(exam.practical_target_total),
+      projectMaxTotal: Number(exam.project_max_total),
+      hasProject,
+      compulsory: compulsorySkill
+        ? { examSkillId: compulsorySkill.id, skillName: compulsorySkill.skills?.name ?? "Unknown skill", assignedMarks: Number(compulsorySkill.assigned_marks) }
+        : null,
+      drawnMarks: drawn[0] ? Number(drawn[0].assigned_marks) : null,
+      components,
       rows,
     },
     error: null,
   };
+}
+
+/** Shared by the results page, exports and printed sheet: a cell's label. */
+export function cellSkillLabel(cell: ResultCell): string {
+  return cell.paperNumber !== null ? `#${cell.paperNumber} ${cell.skillName}` : cell.skillName;
 }

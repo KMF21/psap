@@ -75,24 +75,46 @@ export default async function StudentHistoryPage({ params }: { params: Promise<{
               </div>
 
               <ul className="divide-y divide-border">
+                {e.skills.length === 0 && (
+                  <li className="px-4 py-3 text-sm text-ink-faint sm:px-5">No practical skills recorded yet.</li>
+                )}
                 {e.skills.map((k) => (
-                  <li key={k.skillName} className="flex items-center justify-between gap-4 px-4 py-3 text-sm sm:px-5">
-                    <span className="min-w-0 text-ink">{k.skillName}</span>
+                  <li key={k.slot} className="flex items-center justify-between gap-4 px-4 py-3 text-sm sm:px-5">
+                    <span className="min-w-0">
+                      <span className="block text-xs text-ink-faint">{k.slot}</span>
+                      <span className="text-ink">
+                        {k.paperNumber !== null && <span className="mr-1 font-semibold">#{k.paperNumber}</span>}
+                        {k.skillName}
+                      </span>
+                    </span>
                     <span className="shrink-0 tabular text-ink-muted">
                       {k.score === null ? "—" : k.score} <span className="text-ink-faint">/ {k.assignedMarks}</span>
                     </span>
                   </li>
                 ))}
-                {e.projectMax > 0 && (
-                  <li className="flex items-center justify-between gap-4 px-4 py-3 text-sm sm:px-5">
-                    <span className="text-ink">
-                      Project assessment
-                      {e.projectScores.length > 0 && <span className="ml-1 text-xs text-ink-faint">({e.projectScores.join(" + ")})</span>}
-                    </span>
-                    <span className="shrink-0 tabular text-ink-muted">
-                      {e.projectScores.length === 0 ? "—" : e.projectTotal} <span className="text-ink-faint">/ {e.projectMax}</span>
-                    </span>
-                  </li>
+                <li className="flex items-center justify-between gap-4 bg-bg/60 px-4 py-3 text-sm sm:px-5">
+                  <span className="font-semibold text-ink">Practical</span>
+                  <span className="shrink-0 font-semibold tabular text-ink">
+                    {e.practicalTotal} <span className="font-normal text-ink-faint">/ {e.practicalMax}</span>
+                  </span>
+                </li>
+                {e.hasProject && (
+                  <>
+                    {e.chapters.map((c) => (
+                      <li key={c.name} className="flex items-center justify-between gap-4 px-4 py-2.5 text-sm sm:px-5">
+                        <span className="min-w-0 text-ink-muted">{c.name}</span>
+                        <span className="shrink-0 tabular text-ink-muted">
+                          {c.score === null ? "—" : c.score} <span className="text-ink-faint">/ {c.maxMarks}</span>
+                        </span>
+                      </li>
+                    ))}
+                    <li className="flex items-center justify-between gap-4 rounded-b-lg bg-bg/60 px-4 py-3 text-sm sm:px-5">
+                      <span className="font-semibold text-ink">Project</span>
+                      <span className="shrink-0 font-semibold tabular text-ink">
+                        {e.projectScored ? e.projectTotal : "—"} <span className="font-normal text-ink-faint">/ {e.projectMax}</span>
+                      </span>
+                    </li>
+                  </>
                 )}
               </ul>
 

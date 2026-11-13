@@ -1,7 +1,7 @@
 "use client";
 
 import { FileText } from "lucide-react";
-import type { ResultsData, ResultsRow } from "@/lib/supabase/results";
+import type { ResultCell, ResultsData, ResultsRow } from "@/lib/supabase/results";
 
 function escapeHtml(value: string | number): string {
   return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
@@ -12,19 +12,25 @@ export function ResultSheetButton({ data, row }: { data: ResultsData; row: Resul
     const win = window.open("", "_blank");
     if (!win) return;
 
-    const skillRowsHtml = data.skillColumns
-      .map((col, i) => {
-        const score = row.skillScores[i];
-        return `<tr><td>${escapeHtml(col.skillName)}</td><td class="num">${score === null ? "—" : escapeHtml(score)}</td><td class="num">${col.assignedMarks}</td></tr>`;
+    const cellRow = (slot: string, cell: ResultCell | null, fallbackMax: number | null) => {
+      if (!cell) return `<tr><td>${escapeHtml(slot)}</td><td class="muted">Not assessed</td><td class="num">—</td><td class="num">${fallbackMax ?? "—"}</td></tr>`;
+      const paper = cell.paperNumber !== null ? `#${cell.paperNumber} ` : "";
+      const score = cell.scaledScore === null ? "In progress" : String(cell.scaledScore);
+      return `<tr><td>${escapeHtml(slot)}</td><td>${escapeHtml(paper + cell.skillName)}</td><td class="num">${escapeHtml(score)}</td><td class="num">${cell.assignedMarks}</td></tr>`;
+    };
+    const skillRowsHtml = [
+      ...(data.compulsory ? [cellRow("Compulsory", row.compulsory, data.compulsory.assignedMarks)] : []),
+      ...row.draws.map((d, i) => cellRow(`Draw ${i + 1}`, d, data.drawnMarks)),
+      ...row.extraDraws.map((d, i) => cellRow(`Extra draw ${i + 1}`, d, data.drawnMarks)),
+    ].join("");
+
+    const projectScored = row.projectStatus === "submitted" || row.projectStatus === "amended";
+    const projectRowsHtml = data.components
+      .map((c, i) => {
+        const v = row.componentScores[i];
+        return `<tr><td>${escapeHtml(c.name)}</td><td class="num">${v === null ? "—" : escapeHtml(v)}</td><td class="num">${c.maxMarks}</td></tr>`;
       })
       .join("");
-
-    const projectRowsHtml =
-      data.projectMaxTotal > 0
-        ? row.projectScores
-            .map((s, i) => `<tr><td>CSA ${i + 1}</td><td class="num">${escapeHtml(s)}</td></tr>`)
-            .join("") || `<tr><td colspan="2" class="muted">Not yet scored</td></tr>`
-        : "";
 
     win.document.write(`
       <!DOCTYPE html>
@@ -65,22 +71,22 @@ export function ResultSheetButton({ data, row }: { data: ResultsData; row: Resul
 
         <h2>Practical Assessment</h2>
         <table>
-          <thead><tr><th>Skill</th><th>Score</th><th>Max</th></tr></thead>
+          <thead><tr><th>Slot</th><th>Skill assessed</th><th>Score</th><th>Max</th></tr></thead>
           <tbody>
             ${skillRowsHtml}
-            <tr class="total"><td>Total Practical</td><td class="num">${row.practicalTotal}</td><td class="num">${data.practicalTargetTotal}</td></tr>
+            <tr class="total"><td colspan="2">Total Practical</td><td class="num">${row.practicalTotal}</td><td class="num">${data.practicalTargetTotal}</td></tr>
           </tbody>
         </table>
 
         ${
-          data.projectMaxTotal > 0
+          data.hasProject
             ? `
         <h2>Project Assessment</h2>
         <table>
-          <thead><tr><th>Assessor</th><th>Score</th></tr></thead>
+          <thead><tr><th>Chapter</th><th>Score</th><th>Max</th></tr></thead>
           <tbody>
-            ${projectRowsHtml}
-            <tr class="total"><td>Total Project</td><td class="num">${row.projectTotal} / ${data.projectMaxTotal}</td></tr>
+            ${projectScored ? projectRowsHtml : `<tr><td colspan="3" class="muted">Not yet scored</td></tr>`}
+            <tr class="total"><td>Total Project</td><td class="num">${projectScored ? row.projectTotal : "—"}</td><td class="num">${data.projectMaxTotal}</td></tr>
           </tbody>
         </table>`
             : ""

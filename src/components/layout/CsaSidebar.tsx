@@ -7,18 +7,16 @@ import { usePathname } from "next/navigation";
 import { useUser, SignOutButton } from "@clerk/nextjs";
 import { LayoutDashboard, LogOut, Menu, X } from "lucide-react";
 
-// Note: only Dashboard is a real top-level route. Each of a CSA's actual
-// scoring screens is linked directly from their assignment cards on that
-// dashboard (/csa/scoring/[examSkillId]) rather than a generic nav item,
-// since "which skill" only makes sense once you know which assignment.
-const items = [{ href: "/csa", label: "Dashboard", icon: LayoutDashboard }];
+// Only "My exams" is a top-level route; each exam's student board and the
+// scoring screens are reached from it (/csa/exams/[examId]/...).
+const items = [{ href: "/csa", label: "My exams", icon: LayoutDashboard }];
 
-export function CsaSidebar() {
+export function CsaSidebar({ fullName }: { fullName?: string | null }) {
   const pathname = usePathname();
   const { user } = useUser();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const displayName = user?.fullName ?? user?.primaryEmailAddress?.emailAddress ?? "CSA";
+  const displayName = fullName || user?.fullName || user?.primaryEmailAddress?.emailAddress || "CSA";
   const initials = displayName.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase();
 
   const sidebarContent = (
@@ -43,7 +41,7 @@ export function CsaSidebar() {
       <nav className="flex-1 px-3 py-2">
         <ul className="space-y-0.5">
           {items.map((item) => {
-            const active = pathname === item.href;
+            const active = pathname === item.href || pathname.startsWith("/csa/exams");
             const Icon = item.icon;
             return (
               <li key={item.href}>

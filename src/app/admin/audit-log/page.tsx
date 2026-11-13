@@ -6,12 +6,40 @@ import { getAuditLog } from "@/lib/supabase/audit";
 function formatValue(v: Record<string, unknown> | null): string {
   if (!v) return "—";
   const parts: string[] = [];
-  if ("raw_score" in v) parts.push(`raw ${v.raw_score}`);
-  if ("scaled_score" in v) parts.push(`scaled ${v.scaled_score}`);
-  if ("score" in v) parts.push(`score ${v.score}`);
-  if ("status" in v) parts.push(String(v.status));
+  if ("raw_score" in v && v.raw_score !== null) parts.push(`raw ${v.raw_score}`);
+  if ("scaled_score" in v && v.scaled_score !== null) parts.push(`scaled ${v.scaled_score}`);
+  if ("score" in v && v.score !== null) parts.push(`score ${v.score}`);
+  if ("chapters" in v && v.chapters && typeof v.chapters === "object") {
+    parts.push(Object.entries(v.chapters as Record<string, unknown>).map(([k, n]) => `${k}: ${n}`).join(", "));
+  }
+  if ("total" in v) parts.push(`total ${v.total}`);
+  if ("assigned_marks" in v) parts.push(`${v.assigned_marks} marks`);
+  if ("scores_recalculated" in v) parts.push(`${v.scores_recalculated} score(s) recalculated`);
+  if ("scores_deleted" in v) parts.push(`${v.scores_deleted} score(s) deleted`);
+  if ("paper" in v && v.paper !== null) parts.push(`paper #${v.paper}`);
+  if ("full_name" in v) parts.push(String(v.full_name));
+  if ("students" in v) parts.push(`${v.students} students, ${v.skill_scores ?? 0} skill + ${v.project_scores ?? 0} project scores`);
+  if ("status" in v && v.status) parts.push(String(v.status));
   return parts.join(" · ") || "—";
 }
+
+const actionMeta: Record<string, { label: string; tone: "ok" | "warn" | "danger" }> = {
+  submit: { label: "Submission", tone: "ok" },
+  admin_edit: { label: "Admin correction", tone: "warn" },
+  marks_change: { label: "Marks changed", tone: "warn" },
+  reassign: { label: "Paper reassigned", tone: "warn" },
+  release_claim: { label: "Draft released", tone: "warn" },
+  rename: { label: "CSA renamed", tone: "warn" },
+  remove_from_exam: { label: "Removed from exam", tone: "danger" },
+  remove_skill: { label: "Skill removed", tone: "danger" },
+  delete_exam: { label: "Exam deleted", tone: "danger" },
+  delete_skill: { label: "Skill deleted", tone: "danger" },
+};
+const toneStyle = {
+  ok: { background: "var(--success-soft)", color: "var(--success)" },
+  warn: { background: "var(--warn-soft)", color: "var(--warn)" },
+  danger: { background: "var(--danger-soft)", color: "var(--danger)" },
+} as const;
 
 export default async function AuditLogPage() {
   let entries: Awaited<ReturnType<typeof getAuditLog>>["entries"] = [];
@@ -31,7 +59,7 @@ export default async function AuditLogPage() {
       <PageHeader
         icon={History}
         title="Audit log"
-        subtitle="Every score submission and every Admin correction, most recent first"
+        subtitle="Submissions, Admin corrections and every structural change, most recent first"
         breadcrumb={[{ label: "Dashboard", href: "/admin" }, { label: "Audit log" }]}
       />
 
@@ -72,27 +100,23 @@ export default async function AuditLogPage() {
                   </td>
                   <td className="px-5 py-3.5">
                     <span
-                      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
-                      style={
-                        e.action === "admin_edit"
-                          ? { background: "var(--warn-soft)", color: "var(--warn)" }
-                          : { background: "var(--success-soft)", color: "var(--success)" }
-                      }
+                      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium"
+                      style={toneStyle[actionMeta[e.action]?.tone ?? "warn"]}
                     >
-                      {e.action === "admin_edit" ? <ShieldAlert size={11} /> : <Send size={11} />}
-                      {e.action === "admin_edit" ? "Admin correction" : "Submission"}
+                      {e.action === "submit" ? <Send size={11} /> : <ShieldAlert size={11} />}
+                      {actionMeta[e.action]?.label ?? e.action}
                     </span>
                   </td>
                   <td className="px-5 py-3.5 text-ink">{e.studentName ?? "—"}</td>
                   <td className="px-5 py-3.5 text-ink-muted">{e.contextLabel ?? "—"}</td>
                   <td className="px-5 py-3.5 text-ink-muted">{e.actorName}</td>
                   <td className="px-5 py-3.5 text-xs tabular text-ink-muted">
-                    {e.action === "admin_edit" ? (
+                    {e.previousValue && e.newValue ? (
                       <>
                         {formatValue(e.previousValue)} <span className="text-ink-faint">→</span> {formatValue(e.newValue)}
                       </>
                     ) : (
-                      formatValue(e.newValue)
+                      formatValue(e.newValue ?? e.previousValue)
                     )}
                   </td>
                 </tr>

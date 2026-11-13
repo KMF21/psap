@@ -1,10 +1,9 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { adminUpdateProjectScores } from "@/lib/supabase/scoring";
-import { isAdminSession } from "@/lib/auth";
+import { revalidatePath } from "next/cache";
+import { adminContext } from "@/lib/admin-action";
+import { adminUpdateProjectChapters } from "@/lib/supabase/scoring";
 
 export interface AdminProjectEditState {
   error: string | null;
@@ -16,25 +15,16 @@ export async function adminEditProjectAction(
   _prevState: AdminProjectEditState,
   formData: FormData,
 ): Promise<AdminProjectEditState> {
-  const { userId } = await auth();
-  if (!userId) return { error: "Not signed in." };
-  if (!(await isAdminSession())) return { error: "Only an Admin can correct scores." };
+  const ctx = await adminContext();
+  if (!ctx.ok) return { error: ctx.error };
 
   const scores: Record<string, number> = {};
   for (const [key, value] of formData.entries()) {
-    if (key.startsWith("score_")) scores[key.replace("score_", "")] = Number(value);
+    if (key.startsWith("chapter_") && String(value).trim() !== "") scores[key.replace("chapter_", "")] = Number(value);
   }
+  const { error } = await adminUpdateProjectChapters(ctx.supabase, { examId, studentId, scores, adminUserId: ctx.adminUserId });
+  if (error) return { error };
 
-  try {
-    const supabase = await createServerSupabaseClient();
-    const { data: me, error: meError } = await supabase.from("users").select("id").eq("clerk_user_id", userId).single();
-    if (meError || !me) return { error: "Couldn't identify your account in the database." };
-
-    const { error } = await adminUpdateProjectScores(supabase, { examId, studentId, scores, adminUserId: me.id });
-    if (error) return { error };
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Unknown error connecting to the database." };
-  }
-
+  revalidatePath(`/admin/results/${examId}`);
   redirect(`/admin/results/${examId}`);
 }
