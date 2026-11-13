@@ -10,17 +10,21 @@ export function EligibilityForm({
   examId,
   students,
   otherExams,
+  examLevel,
 }: {
   examId: string;
   students: StudentEligibilityRow[];
   otherExams: { id: string; label: string }[];
+  examLevel: string | null;
 }) {
   const boundAction = saveEligibilityAction.bind(null, examId);
   const [state, formAction, isPending] = useActionState<EligibilityState, FormData>(boundAction, { error: null });
 
   const [query, setQuery] = useState("");
-  const [level, setLevel] = useState("");
-  const [onlyRoster, setOnlyRoster] = useState(students.some((s) => s.isEligible));
+  const levelExists = Boolean(examLevel) && students.some((s) => s.level === examLevel);
+  const [level, setLevel] = useState(levelExists ? examLevel! : "");
+  // Start on the exam's level when it has one; otherwise show the current roster.
+  const [onlyRoster, setOnlyRoster] = useState(!levelExists && students.some((s) => s.isEligible));
   const [rows, setRows] = useState(students);
   const [removing, startRemove] = useTransition();
   const [rowError, setRowError] = useState<string | null>(null);
@@ -139,6 +143,15 @@ export function EligibilityForm({
         <input key={id} type="hidden" name="studentIds" value={id} />
       ))}
 
+      {examLevel && (
+        <p className="border-b border-border px-4 py-3 text-xs text-ink-muted">
+          This exam is for <strong className="text-ink">{examLevel}</strong>.{" "}
+          {levelExists
+            ? "Showing students at that level — use “Select all shown” to add them all, or change the level filter."
+            : "No students have this level on their record yet. Check the wording matches, or change levels on the Students page."}
+        </p>
+      )}
+
       {otherExams.length > 0 && (
         <div className="space-y-2 border-b border-border p-4">
           <p className="text-xs font-medium text-ink-muted">Start from an earlier examination</p>
@@ -178,7 +191,7 @@ export function EligibilityForm({
               className="w-full rounded-md border border-border bg-bg py-2.5 pl-8 pr-3 text-sm text-ink placeholder:text-ink-faint sm:py-2"
             />
           </div>
-          {levels.length > 1 && (
+          {(levels.length > 1 || examLevel) && (
             <select
               value={level}
               onChange={(e) => setLevel(e.target.value)}

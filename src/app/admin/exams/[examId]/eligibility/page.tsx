@@ -9,6 +9,8 @@ export default async function EligibilityPage({ params }: { params: Promise<{ ex
 
   let students: Awaited<ReturnType<typeof getStudentsWithEligibility>>["students"] = [];
   let otherExams: { id: string; label: string }[] = [];
+  let examLevel: string | null = null;
+  let examTitle = "Exam";
   let error: string | null = null;
 
   try {
@@ -17,9 +19,12 @@ export default async function EligibilityPage({ params }: { params: Promise<{ ex
     students = result.students;
     error = result.error;
     const examsResult = await getExams(supabase);
+    const thisExam = examsResult.exams.find((e) => e.id === examId);
+    examLevel = thisExam?.level ?? null;
+    examTitle = thisExam?.title ?? examTitle;
     otherExams = examsResult.exams
       .filter((e) => e.id !== examId)
-      .map((e) => ({ id: e.id, label: `${e.title} (${e.academicSession})` }));
+      .map((e) => ({ id: e.id, label: `${e.title} (${e.academicSession}${e.level ? ` · ${e.level}` : ""})` }));
   } catch (e) {
     error = e instanceof Error ? e.message : "Unknown error connecting to the database.";
   }
@@ -33,7 +38,7 @@ export default async function EligibilityPage({ params }: { params: Promise<{ ex
         breadcrumb={[
           { label: "Dashboard", href: "/admin" },
           { label: "Examinations", href: "/admin/exams" },
-          { label: "Exam", href: `/admin/exams/${examId}` },
+          { label: examTitle, href: `/admin/exams/${examId}` },
           { label: "Roster" },
         ]}
       />
@@ -54,7 +59,7 @@ export default async function EligibilityPage({ params }: { params: Promise<{ ex
           No students registered yet. Add students first.
         </div>
       ) : (
-        <EligibilityForm examId={examId} students={students} otherExams={otherExams} />
+        <EligibilityForm examId={examId} students={students} otherExams={otherExams} examLevel={examLevel} />
       )}
     </div>
   );

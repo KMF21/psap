@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { getCsaOptions, getExamDetail, type ExamSkillRow } from "@/lib/supabase/exams";
+import { getCsaOptions, getExamDetail, getLevelOptions, type ExamSkillRow } from "@/lib/supabase/exams";
 import { ExamStatusSelect } from "./ExamStatusSelect";
 import { ExamSettingsCard } from "./ExamSettingsCard";
 import { ExamCsasCard } from "./ExamCsasCard";
@@ -30,11 +30,13 @@ export default async function ExamDetailPage({ params }: { params: Promise<{ exa
 
   let exam: Awaited<ReturnType<typeof getExamDetail>>["exam"] = null;
   let allCsas: Awaited<ReturnType<typeof getCsaOptions>> = [];
+  let levels: string[] = [];
   let error: string | null = null;
 
   try {
     const supabase = await createServerSupabaseClient();
-    const [result, csas] = await Promise.all([getExamDetail(supabase, examId), getCsaOptions(supabase)]);
+    const [result, csas, levelInfo] = await Promise.all([getExamDetail(supabase, examId), getCsaOptions(supabase), getLevelOptions(supabase)]);
+    levels = levelInfo.levels.map((l) => l.level);
     exam = result.exam;
     error = result.error;
     allCsas = csas;
@@ -79,7 +81,7 @@ export default async function ExamDetailPage({ params }: { params: Promise<{ exa
       <PageHeader
         icon={ClipboardList}
         title={exam.title}
-        subtitle={`${exam.courseCode} · ${exam.academicSession}`}
+        subtitle={`${exam.courseCode} · ${exam.academicSession}${exam.level ? ` · ${exam.level}` : ""}`}
         breadcrumb={[
           { label: "Dashboard", href: "/admin" },
           { label: "Examinations", href: "/admin/exams" },
@@ -219,7 +221,8 @@ export default async function ExamDetailPage({ params }: { params: Promise<{ exa
 
           <ExamSettingsCard
             examId={exam.id}
-            initial={{ title: exam.title, drawsPerStudent: exam.drawsPerStudent, examType: exam.examType }}
+            initial={{ title: exam.title, drawsPerStudent: exam.drawsPerStudent, examType: exam.examType, level: exam.level ?? "" }}
+            levels={levels}
             compulsoryMarks={exam.compulsory?.assignedMarks ?? null}
             drawnMarks={exam.drawnMarks}
             projectMaxTotal={exam.projectMaxTotal}

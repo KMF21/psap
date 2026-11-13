@@ -6,7 +6,7 @@ import { AlertTriangle } from "lucide-react";
 import type { CourseOption, SessionOption } from "@/lib/supabase/exams";
 import { createExamAction, type CreateExamState } from "./actions";
 
-export function NewExamForm({ courses, sessions }: { courses: CourseOption[]; sessions: SessionOption[] }) {
+export function NewExamForm({ courses, sessions, levels }: { courses: CourseOption[]; sessions: SessionOption[]; levels: string[] }) {
   const [state, formAction, isPending] = useActionState<CreateExamState, FormData>(createExamAction, { error: null });
   const [courseMode, setCourseMode] = useState<"existing" | "new">(courses.length > 0 ? "existing" : "new");
   const [sessionMode, setSessionMode] = useState<"existing" | "new">(sessions.length > 0 ? "existing" : "new");
@@ -35,6 +35,27 @@ export function NewExamForm({ courses, sessions }: { courses: CourseOption[]; se
           placeholder="e.g. CHE214 Practical Examination 2027"
           className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm text-ink placeholder:text-ink-faint"
         />
+      </div>
+
+      <div>
+        <label htmlFor="level" className="mb-1.5 block text-sm font-medium text-ink">
+          Level this exam is for <span className="font-normal text-ink-faint">(optional)</span>
+        </label>
+        <input
+          id="level"
+          name="level"
+          list="level-options"
+          maxLength={60}
+          autoComplete="off"
+          placeholder={levels[0] ? `e.g. ${levels[0]}` : "e.g. Year 2"}
+          className="w-full rounded-md border border-border bg-bg px-3 py-2.5 text-base text-ink placeholder:text-ink-faint sm:max-w-xs sm:text-sm"
+        />
+        <datalist id="level-options">
+          {levels.map((l) => (
+            <option key={l} value={l} />
+          ))}
+        </datalist>
+        <p className="mt-1 text-xs text-ink-faint">Use the same wording as on student records so the roster can pre-select them.</p>
       </div>
 
       {/* Course */}

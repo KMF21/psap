@@ -33,6 +33,7 @@ export interface CsaExamCard {
   examId: string;
   title: string;
   courseCode: string;
+  level: string | null;
   status: "draft" | "open" | "closed";
   drawsPerStudent: number;
   hasProject: boolean;
@@ -45,6 +46,7 @@ type MyExamRow = {
   exams: {
     id: string;
     title: string;
+    level: string | null;
     status: "draft" | "open" | "closed";
     exam_type: string;
     draws_per_student: number;
@@ -55,7 +57,7 @@ type MyExamRow = {
 export async function getMyExams(supabase: SupabaseClient, meId: string): Promise<{ exams: CsaExamCard[]; error: string | null }> {
   const { data, error } = await supabase
     .from("exam_csas")
-    .select("exams(id, title, status, exam_type, draws_per_student, courses(code))")
+    .select("exams(id, title, level, status, exam_type, draws_per_student, courses(code))")
     .eq("csa_id", meId);
   if (error) return { exams: [], error: error.message };
 
@@ -69,6 +71,7 @@ export async function getMyExams(supabase: SupabaseClient, meId: string): Promis
       examId: e.id,
       title: e.title,
       courseCode: e.courses?.code ?? "—",
+      level: e.level,
       status: e.status,
       drawsPerStudent: e.draws_per_student,
       hasProject: e.exam_type === "practical_and_project",

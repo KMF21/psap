@@ -4,6 +4,8 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { FilterBar } from "@/components/ui/FilterBar";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getStudentList, STUDENTS_PAGE_SIZE, type StudentListResult } from "@/lib/supabase/students";
+import { getLevelOptions } from "@/lib/supabase/exams";
+import { ChangeLevelCard } from "./ChangeLevelCard";
 
 export default async function StudentsPage({
   searchParams,
@@ -14,11 +16,15 @@ export default async function StudentsPage({
   const page = Math.max(1, Number(sp.page) || 1);
 
   let result: StudentListResult = { students: [], total: 0, levels: [], exams: [], error: null };
+  let levelInfo: Awaited<ReturnType<typeof getLevelOptions>> = { levels: [], unset: 0 };
   let error: string | null = null;
 
   try {
     const supabase = await createServerSupabaseClient();
-    result = await getStudentList(supabase, { q: sp.q, level: sp.level, examId: sp.exam, page });
+    [result, levelInfo] = await Promise.all([
+      getStudentList(supabase, { q: sp.q, level: sp.level, examId: sp.exam, page }),
+      getLevelOptions(supabase),
+    ]);
     error = result.error;
   } catch (e) {
     error = e instanceof Error ? e.message : "Unknown error connecting to the database.";
@@ -81,6 +87,8 @@ export default async function StudentsPage({
           </div>
         </div>
       ) : (
+        <>
+        <ChangeLevelCard levels={levelInfo.levels} unset={levelInfo.unset} />
         <div className="rounded-lg border border-border bg-surface">
           <FilterBar
             searchPlaceholder="Search name or reg. number…"
@@ -144,6 +152,7 @@ export default async function StudentsPage({
             </div>
           )}
         </div>
+        </>
       )}
     </div>
   );

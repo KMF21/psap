@@ -9,6 +9,7 @@ export interface ExamListItem {
   title: string;
   courseCode: string;
   academicSession: string;
+  level: string | null;
   practicalTargetTotal: number;
   projectMaxTotal: number;
   status: ExamStatus;
@@ -39,6 +40,30 @@ export interface CsaOption {
   id: string;
   fullName: string;
   email: string | null;
+}
+
+export interface LevelOption {
+  level: string;
+  students: number;
+}
+
+/** Levels in use on student records, with how many students are at each. */
+export async function getLevelOptions(supabase: SupabaseClient): Promise<{ levels: LevelOption[]; unset: number }> {
+  const { data } = await supabase.rpc("student_level_counts");
+  const rows = (data ?? []) as { level: string | null; students: number }[];
+  return {
+    levels: rows.filter((r) => r.level !== null).map((r) => ({ level: r.level as string, students: Number(r.students) })),
+    unset: Number(rows.find((r) => r.level === null)?.students ?? 0),
+  };
+}
+
+export async function changeStudentLevel(
+  supabase: SupabaseClient,
+  from: string | null,
+  to: string,
+): Promise<{ error: string | null; changed: number }> {
+  const { data, error } = await supabase.rpc("admin_change_student_level", { p_from: from, p_to: to });
+  return { error: error?.message ?? null, changed: Number(data ?? 0) };
 }
 
 export async function getCourseOptions(supabase: SupabaseClient): Promise<CourseOption[]> {
@@ -103,6 +128,7 @@ export async function createExam(
     title: string;
     examType: ExamType;
     drawsPerStudent: number;
+    level: string | null;
   },
 ): Promise<{ examId: string | null; error: string | null }> {
   // Practical and project maxima are derived in the database from the
@@ -115,6 +141,7 @@ export async function createExam(
       title: input.title,
       exam_type: input.examType,
       draws_per_student: input.drawsPerStudent,
+      level: input.level,
       status: "draft",
     })
     .select("id")
@@ -127,11 +154,11 @@ export async function createExam(
 export async function updateExamSettings(
   supabase: SupabaseClient,
   examId: string,
-  input: { title: string; drawsPerStudent: number; examType: ExamType },
+  input: { title: string; drawsPerStudent: number; examType: ExamType; level: string | null },
 ): Promise<{ error: string | null }> {
   const { error } = await supabase
     .from("exams")
-    .update({ title: input.title, draws_per_student: input.drawsPerStudent, exam_type: input.examType })
+    .update({ title: input.title, draws_per_student: input.drawsPerStudent, exam_type: input.examType, level: input.level })
     .eq("id", examId);
   return { error: error?.message ?? null };
 }
@@ -159,6 +186,7 @@ export async function deleteExam(
 type ExamListRow = {
   id: string;
   title: string;
+  level: string | null;
   practical_target_total: number;
   project_max_total: number;
   status: ExamStatus;
@@ -169,7 +197,7 @@ type ExamListRow = {
 export async function getExams(supabase: SupabaseClient): Promise<{ exams: ExamListItem[]; error: string | null }> {
   const { data: examRows, error: examsError } = await supabase
     .from("exams")
-    .select("id, title, practical_target_total, project_max_total, status, courses(code), academic_sessions(label)")
+    .select("id, title, level, practical_target_total, project_max_total, status, courses(code), academic_sessions(label)")
     .order("created_at", { ascending: false });
 
   if (examsError) return { exams: [], error: examsError.message };
@@ -187,6 +215,7 @@ export async function getExams(supabase: SupabaseClient): Promise<{ exams: ExamL
     title: row.title,
     courseCode: row.courses?.code ?? "—",
     academicSession: row.academic_sessions?.label ?? "—",
+    level: row.level,
     practicalTargetTotal: Number(row.practical_target_total),
     projectMaxTotal: Number(row.project_max_total),
     status: row.status,
@@ -222,6 +251,7 @@ export interface ExamDetail {
   title: string;
   courseCode: string;
   academicSession: string;
+  level: string | null;
   examType: ExamType;
   status: ExamStatus;
   drawsPerStudent: number;
@@ -239,6 +269,7 @@ export interface ExamDetail {
 type ExamDetailRow = {
   id: string;
   title: string;
+  level: string | null;
   exam_type: ExamType;
   practical_target_total: number;
   project_max_total: number;
@@ -273,7 +304,7 @@ export async function getExamDetail(
   const { data: examRow, error: examError } = await supabase
     .from("exams")
     .select(
-      "id, title, exam_type, practical_target_total, project_max_total, draws_per_student, status, courses(code), academic_sessions(label)",
+      "id, title, level, exam_type, practical_target_total, project_max_total, draws_per_student, status, courses(code), academic_sessions(label)",
     )
     .eq("id", examId)
     .maybeSingle();
@@ -333,6 +364,7 @@ export async function getExamDetail(
       title: row.title,
       courseCode: row.courses?.code ?? "—",
       academicSession: row.academic_sessions?.label ?? "—",
+      level: row.level,
       examType: row.exam_type,
       status: row.status,
       drawsPerStudent: row.draws_per_student,

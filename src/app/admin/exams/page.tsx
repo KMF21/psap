@@ -10,7 +10,7 @@ import { filterExams, examFilterOptions } from "@/lib/exam-filters";
 export default async function ExamsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; session?: string; course?: string; status?: string }>;
+  searchParams: Promise<{ q?: string; session?: string; course?: string; status?: string; level?: string }>;
 }) {
   const sp = await searchParams;
   let exams: Awaited<ReturnType<typeof getExams>>["exams"] = [];
@@ -69,6 +69,7 @@ export default async function ExamsPage({
             selects={[
               { param: "session", label: "All sessions", options: opts.sessions },
               { param: "course", label: "All courses", options: opts.courses },
+              ...(opts.levels.length > 0 ? [{ param: "level", label: "All levels", options: opts.levels }] : []),
               { param: "status", label: "Any status", options: [{ value: "draft", label: "Draft" }, { value: "open", label: "Open" }, { value: "closed", label: "Closed" }] },
             ]}
             resultNote={shown.length === exams.length ? `${exams.length} examinations` : `Showing ${shown.length} of ${exams.length}`}
@@ -88,7 +89,7 @@ export default async function ExamsPage({
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-ink">{exam.title}</p>
                   <p className="mt-1 text-xs text-ink-muted">
-                    {exam.courseCode} · {exam.academicSession} · {exam.skillCount} skill{exam.skillCount !== 1 ? "s" : ""} configured
+                    {exam.courseCode} · {exam.academicSession}{exam.level ? ` · ${exam.level}` : ""} · {exam.skillCount} skill{exam.skillCount !== 1 ? "s" : ""} configured
                   </p>
                 </div>
                 <div className="flex items-center justify-between gap-4 sm:justify-end">

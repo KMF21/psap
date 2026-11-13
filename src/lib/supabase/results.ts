@@ -49,6 +49,7 @@ export interface ResultsData {
   examTitle: string;
   academicSession: string;
   courseCode: string;
+  examLevel: string | null;
   status: "draft" | "open" | "closed";
   drawsPerStudent: number;
   practicalTargetTotal: number;
@@ -63,6 +64,7 @@ export interface ResultsData {
 type ExamRow = {
   id: string;
   title: string;
+  level: string | null;
   status: "draft" | "open" | "closed";
   exam_type: string;
   draws_per_student: number;
@@ -99,7 +101,7 @@ export async function getResultsData(
 ): Promise<{ data: ResultsData | null; error: string | null }> {
   const { data: examRow, error: examError } = await supabase
     .from("exams")
-    .select("id, title, status, exam_type, draws_per_student, practical_target_total, project_max_total, academic_sessions(label), courses(code)")
+    .select("id, title, level, status, exam_type, draws_per_student, practical_target_total, project_max_total, academic_sessions(label), courses(code)")
     .eq("id", examId)
     .maybeSingle();
   if (examError) return { data: null, error: examError.message };
@@ -220,6 +222,7 @@ export async function getResultsData(
       examTitle: exam.title,
       academicSession: exam.academic_sessions?.label ?? "—",
       courseCode: exam.courses?.code ?? "—",
+      examLevel: exam.level,
       status: exam.status,
       drawsPerStudent: n,
       practicalTargetTotal: Number(exam.practical_target_total),

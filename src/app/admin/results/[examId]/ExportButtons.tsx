@@ -99,7 +99,7 @@ export function ExportButtons({ data }: { data: ResultsData }) {
       <body>
         <div style="margin-bottom:8px"><img src="${window.location.origin}/logo.jpg" alt="" style="height:56px;width:56px;object-fit:contain"></div>
         <h1>${escapeHtml(data.examTitle)}</h1>
-        <p class="meta">${escapeHtml(data.courseCode)} · ${escapeHtml(data.academicSession)} · Generated ${new Date().toLocaleDateString()} · Practical /${data.practicalTargetTotal}${data.hasProject ? ` · Project /${data.projectMaxTotal}` : ""} · Only submitted or corrected scores are shown.</p>
+        <p class="meta">${escapeHtml(data.courseCode)} · ${escapeHtml(data.academicSession)}${data.examLevel ? ` · ${escapeHtml(data.examLevel)}` : ""} · Generated ${new Date().toLocaleDateString()} · Practical /${data.practicalTargetTotal}${data.hasProject ? ` · Project /${data.projectMaxTotal}` : ""} · Only submitted or corrected scores are shown.</p>
         <table>
           <thead><tr>${headHtml}</tr></thead>
           <tbody>${bodyHtml}</tbody>

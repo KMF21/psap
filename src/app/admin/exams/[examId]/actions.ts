@@ -32,7 +32,7 @@ export async function updateExamStatusAction(examId: string, status: ExamStatus)
 
 export async function updateExamSettingsAction(
   examId: string,
-  input: { title: string; drawsPerStudent: number; examType: ExamType },
+  input: { title: string; drawsPerStudent: number; examType: ExamType; level: string },
 ): Promise<{ error: string | null }> {
   const ctx = await adminContext();
   if (!ctx.ok) return { error: ctx.error };
@@ -42,7 +42,8 @@ export async function updateExamSettingsAction(
     return { error: "Skills drawn per student must be a whole number from 0 to 20." };
   }
   if (input.examType !== "practical_only" && input.examType !== "practical_and_project") return { error: "Unknown exam type." };
-  const { error } = await updateExamSettings(ctx.supabase, examId, { ...input, title });
+  const level = input.level.replace(/\s+/g, " ").trim().slice(0, 60) || null;
+  const { error } = await updateExamSettings(ctx.supabase, examId, { ...input, title, level });
   if (error) return { error };
   refresh(examId);
   return { error: null };

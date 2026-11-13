@@ -63,7 +63,7 @@ export default async function CsaDashboard() {
                     <div className="min-w-0">
                       <p className="font-semibold text-ink">{e.title}</p>
                       <p className="mt-0.5 text-xs text-ink-muted">
-                        {e.courseCode} · compulsory + {e.drawsPerStudent} draw{e.drawsPerStudent !== 1 ? "s" : ""}
+                        {e.courseCode}{e.level ? ` · ${e.level}` : ""} · compulsory + {e.drawsPerStudent} draw{e.drawsPerStudent !== 1 ? "s" : ""}
                         {e.hasProject ? " · project" : ""}
                       </p>
                     </div>

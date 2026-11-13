@@ -12,6 +12,7 @@ export async function createExamAction(_prevState: CreateExamState, formData: Fo
   const title = String(formData.get("title") ?? "").trim();
   const examType = String(formData.get("examType") ?? "practical_only") as "practical_only" | "practical_and_project";
   const drawsPerStudent = Number(formData.get("drawsPerStudent") ?? 3);
+  const level = String(formData.get("level") ?? "").replace(/\s+/g, " ").trim().slice(0, 60) || null;
 
   const courseId = String(formData.get("courseId") ?? "");
   const newCourseCode = String(formData.get("newCourseCode") ?? "").trim();
@@ -56,6 +57,7 @@ export async function createExamAction(_prevState: CreateExamState, formData: Fo
       title,
       examType,
       drawsPerStudent,
+      level,
     });
 
     if (result.error || !result.examId) return { error: result.error ?? "Failed to create exam." };

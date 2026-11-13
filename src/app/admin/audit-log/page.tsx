@@ -18,7 +18,8 @@ function formatValue(v: Record<string, unknown> | null): string {
   if ("scores_deleted" in v) parts.push(`${v.scores_deleted} score(s) deleted`);
   if ("paper" in v && v.paper !== null) parts.push(`paper #${v.paper}`);
   if ("full_name" in v) parts.push(String(v.full_name));
-  if ("students" in v) parts.push(`${v.students} students, ${v.skill_scores ?? 0} skill + ${v.project_scores ?? 0} project scores`);
+  if ("level" in v) parts.push(`level ${v.level}${"students" in v && typeof v.students === "number" ? ` (${v.students} students)` : ""}`);
+  if ("students" in v && "skill_scores" in v) parts.push(`${v.students} students, ${v.skill_scores ?? 0} skill + ${v.project_scores ?? 0} project scores`);
   if ("status" in v && v.status) parts.push(String(v.status));
   return parts.join(" · ") || "—";
 }
@@ -34,6 +35,7 @@ const actionMeta: Record<string, { label: string; tone: "ok" | "warn" | "danger"
   remove_skill: { label: "Skill removed", tone: "danger" },
   delete_exam: { label: "Exam deleted", tone: "danger" },
   delete_skill: { label: "Skill deleted", tone: "danger" },
+  change_level: { label: "Level changed", tone: "warn" },
 };
 const toneStyle = {
   ok: { background: "var(--success-soft)", color: "var(--success)" },

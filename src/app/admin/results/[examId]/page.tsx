@@ -88,7 +88,7 @@ export default async function ExamResultsPage({
       <PageHeader
         icon={FileBarChart}
         title="Results"
-        subtitle={`${data.examTitle} · ${complete} of ${data.rows.length} fully assessed`}
+        subtitle={`${data.examTitle}${data.examLevel ? ` · ${data.examLevel}` : ""} · ${complete} of ${data.rows.length} fully assessed`}
         breadcrumb={[
           { label: "Dashboard", href: "/admin" },
           { label: "Results", href: "/admin/results" },

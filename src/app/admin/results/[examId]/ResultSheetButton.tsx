@@ -64,7 +64,7 @@ export function ResultSheetButton({ data, row }: { data: ResultsData; row: Resul
         <dl class="info-grid">
           <div><dt>Student:</dt><dd>${escapeHtml(row.fullName)}</dd></div>
           <div><dt>Reg. No.:</dt><dd>${escapeHtml(row.registrationNumber)}</dd></div>
-          <div><dt>Level:</dt><dd>${escapeHtml(row.level || "—")}</dd></div>
+          <div><dt>Level:</dt><dd>${escapeHtml(row.level || data.examLevel || "—")}</dd></div>
           <div><dt>Academic Session:</dt><dd>${escapeHtml(data.academicSession)}</dd></div>
           <div style="grid-column: 1 / -1;"><dt>Examination:</dt><dd>${escapeHtml(data.examTitle)}</dd></div>
         </dl>

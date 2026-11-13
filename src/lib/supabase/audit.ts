@@ -91,6 +91,8 @@ export async function getAuditLog(
       contextLabel = "Project";
     } else if (r.entity_type === "exam_skill") {
       contextLabel = str(prev.skill) ? `${str(prev.exam) ?? ""} · ${str(prev.skill)}` : "Allowed marks";
+    } else if (r.entity_type === "student" && r.action === "change_level") {
+      contextLabel = "Student levels";
     } else if (r.entity_type === "student") {
       studentName = str(next.student);
       contextLabel = str(next.exam);

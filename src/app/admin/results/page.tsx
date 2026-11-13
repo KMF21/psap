@@ -9,7 +9,7 @@ import { getExams } from "@/lib/supabase/exams";
 export default async function ResultsIndexPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; session?: string; course?: string }>;
+  searchParams: Promise<{ q?: string; session?: string; course?: string; level?: string }>;
 }) {
   const sp = await searchParams;
   let exams: Awaited<ReturnType<typeof getExams>>["exams"] = [];
@@ -59,6 +59,7 @@ export default async function ResultsIndexPage({
             selects={[
               { param: "session", label: "All sessions", options: opts.sessions },
               { param: "course", label: "All courses", options: opts.courses },
+              ...(opts.levels.length > 0 ? [{ param: "level", label: "All levels", options: opts.levels }] : []),
             ]}
             resultNote={shown.length === exams.length ? `${exams.length} examinations` : `Showing ${shown.length} of ${exams.length}`}
           />
@@ -76,7 +77,7 @@ export default async function ResultsIndexPage({
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-ink">{exam.title}</p>
                 <p className="mt-1 text-xs text-ink-muted">
-                  {exam.courseCode} · {exam.academicSession} · {exam.skillCount} skill{exam.skillCount !== 1 ? "s" : ""}
+                  {exam.courseCode} · {exam.academicSession}{exam.level ? ` · ${exam.level}` : ""} · {exam.skillCount} skill{exam.skillCount !== 1 ? "s" : ""}
                 </p>
               </div>
               <p className="shrink-0 text-sm font-medium tabular text-accent-ink">View results →</p>

@@ -5,6 +5,7 @@ export interface ExamFilterParams {
   session?: string;
   course?: string;
   status?: string;
+  level?: string;
 }
 
 export function filterExams(exams: ExamListItem[], f: ExamFilterParams): ExamListItem[] {
@@ -14,7 +15,8 @@ export function filterExams(exams: ExamListItem[], f: ExamFilterParams): ExamLis
       (!needle || e.title.toLowerCase().includes(needle) || e.courseCode.toLowerCase().includes(needle)) &&
       (!f.session || e.academicSession === f.session) &&
       (!f.course || e.courseCode === f.course) &&
-      (!f.status || e.status === f.status),
+      (!f.status || e.status === f.status) &&
+      (!f.level || e.level === f.level),
   );
 }
 
@@ -22,7 +24,9 @@ export function filterExams(exams: ExamListItem[], f: ExamFilterParams): ExamLis
 export function examFilterOptions(exams: ExamListItem[]) {
   const sessions = [...new Set(exams.map((e) => e.academicSession).filter((s) => s !== "—"))].sort().reverse();
   const courses = [...new Set(exams.map((e) => e.courseCode).filter((c) => c !== "—"))].sort();
+  const levels = [...new Set(exams.map((e) => e.level).filter((l): l is string => Boolean(l)))].sort();
   return {
+    levels: levels.map((l) => ({ value: l, label: l })),
     sessions: sessions.map((s) => ({ value: s, label: s })),
     courses: courses.map((c) => ({ value: c, label: c })),
   };

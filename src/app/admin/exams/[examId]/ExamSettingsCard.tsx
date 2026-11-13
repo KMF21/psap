@@ -11,9 +11,11 @@ export function ExamSettingsCard({
   drawnMarks,
   projectMaxTotal,
   hasProjectScores,
+  levels,
 }: {
   examId: string;
-  initial: { title: string; drawsPerStudent: number; examType: "practical_only" | "practical_and_project" };
+  initial: { title: string; drawsPerStudent: number; examType: "practical_only" | "practical_and_project"; level: string };
+  levels: string[];
   compulsoryMarks: number | null;
   drawnMarks: number | null;
   projectMaxTotal: number;
@@ -22,17 +24,19 @@ export function ExamSettingsCard({
   const [title, setTitle] = useState(initial.title);
   const [draws, setDraws] = useState(String(initial.drawsPerStudent));
   const [examType, setExamType] = useState(initial.examType);
+  const [level, setLevel] = useState(initial.level);
   const [message, setMessage] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const n = Number(draws);
   const practicalMax = (compulsoryMarks ?? 0) + (Number.isFinite(n) ? n : 0) * (drawnMarks ?? 0);
-  const dirty = title !== initial.title || draws !== String(initial.drawsPerStudent) || examType !== initial.examType;
+  const dirty =
+    title !== initial.title || draws !== String(initial.drawsPerStudent) || examType !== initial.examType || level.trim() !== initial.level;
 
   function save() {
     setMessage(null);
     startTransition(async () => {
-      const result = await updateExamSettingsAction(examId, { title, drawsPerStudent: Number(draws), examType });
+      const result = await updateExamSettingsAction(examId, { title, drawsPerStudent: Number(draws), examType, level });
       setMessage(result.error ? { tone: "error", text: result.error } : { tone: "ok", text: "Settings saved." });
     });
   }
@@ -49,6 +53,25 @@ export function ExamSettingsCard({
             onChange={(e) => setTitle(e.target.value)}
             className="w-full rounded-md border border-border bg-bg px-3 py-2.5 text-base text-ink sm:text-sm"
           />
+        </div>
+        <div>
+          <label htmlFor="exam-level" className="mb-1.5 block text-sm font-medium text-ink">Level</label>
+          <input
+            id="exam-level"
+            value={level}
+            onChange={(e) => setLevel(e.target.value)}
+            list="exam-level-options"
+            maxLength={60}
+            autoComplete="off"
+            placeholder="e.g. Year 2"
+            className="w-full rounded-md border border-border bg-bg px-3 py-2.5 text-base text-ink placeholder:text-ink-faint sm:max-w-xs sm:text-sm"
+          />
+          <datalist id="exam-level-options">
+            {levels.map((l) => (
+              <option key={l} value={l} />
+            ))}
+          </datalist>
+          <p className="mt-1 text-xs text-ink-faint">The roster page pre-selects students at this level.</p>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
