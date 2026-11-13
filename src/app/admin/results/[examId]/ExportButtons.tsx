@@ -17,7 +17,6 @@ function csvEscape(value: string | number): string {
 function buildHeaders(data: ResultsData): string[] {
   const headers = ["Registration Number", "Full Name", ...data.skillColumns.map((c) => c.skillName), "Practical Total"];
   if (data.projectMaxTotal > 0) headers.push("Project Total");
-  headers.push("Grand Total");
   return headers;
 }
 
@@ -30,7 +29,6 @@ function buildRows(data: ResultsData): (string | number)[][] {
       row.practicalTotal,
     ];
     if (data.projectMaxTotal > 0) cells.push(row.projectTotal);
-    cells.push(row.grandTotal);
     return cells;
   });
 }

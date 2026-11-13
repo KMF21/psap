@@ -5,6 +5,8 @@ import { SignOutButton } from "@clerk/nextjs";
 import { redirect } from "next/navigation";
 import { ShieldCheck, AlertTriangle } from "lucide-react";
 import { Footer } from "@/components/ui/Footer";
+import { ensureRoleFromInvitation } from "@/lib/clerk-invitations";
+import { RoleRefresh } from "./RoleRefresh";
 
 export default async function Home() {
   const { userId, sessionClaims } = await auth();
@@ -14,6 +16,16 @@ export default async function Home() {
 
     if (role === "admin") redirect("/admin");
     if (role === "csa") redirect("/csa");
+
+    // No role in the session token yet. If this person was invited as a CSA,
+    // apply the role now (or pick up one the webhook already applied) and
+    // refresh their session instead of making the Admin fix it in Clerk.
+    let appliedRole: string | null = null;
+    try {
+      appliedRole = (await ensureRoleFromInvitation(userId)).role;
+    } catch {
+      appliedRole = null;
+    }
 
     // Signed in, but no recognized role yet — show this instead of bouncing
     // back to /sign-in. Redirecting an already-authenticated user to the
@@ -31,14 +43,21 @@ export default async function Home() {
             >
               <AlertTriangle size={22} style={{ color: "var(--warn)" }} />
             </div>
-            <h1 className="text-xl font-semibold text-ink">No role assigned yet</h1>
-            <p className="mt-2 text-sm text-ink-muted">
-              You&apos;re signed in, but this account has no Admin or CSA role set. An
-              administrator needs to set your role in Clerk (Users → your account →
-              Public metadata → <code className="text-xs">{"{ \"role\": \"admin\" }"}</code> or{" "}
-              <code className="text-xs">{"{ \"role\": \"csa\" }"}</code>), then you&apos;ll need to
-              sign out and back in for it to take effect.
-            </p>
+            {appliedRole ? (
+              <>
+                <h1 className="text-xl font-semibold text-ink">Welcome</h1>
+                <RoleRefresh />
+              </>
+            ) : (
+              <>
+                <h1 className="text-xl font-semibold text-ink">No role assigned yet</h1>
+                <p className="mt-2 text-sm text-ink-muted">
+                  You&apos;re signed in, but this account hasn&apos;t been given access. If you were invited as a CSA,
+                  make sure you signed up with the same email address the invitation was sent to — or ask the
+                  Admin to send a new invitation to this address.
+                </p>
+              </>
+            )}
             <div className="mt-6">
               <SignOutButton>
                 <button className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-ink hover:bg-surface">

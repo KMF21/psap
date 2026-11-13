@@ -12,8 +12,6 @@ export function ResultSheetButton({ data, row }: { data: ResultsData; row: Resul
     const win = window.open("", "_blank");
     if (!win) return;
 
-    const grandMax = data.practicalTargetTotal + data.projectMaxTotal;
-
     const skillRowsHtml = data.skillColumns
       .map((col, i) => {
         const score = row.skillScores[i];
@@ -48,9 +46,6 @@ export function ResultSheetButton({ data, row }: { data: ResultsData; row: Resul
           td.num { text-align: right; font-variant-numeric: tabular-nums; }
           td.muted { color: #8B93A1; text-align: center; }
           tr.total td { font-weight: 700; background: #FAFAF8; }
-          .grand-total { margin-top: 20px; padding: 14px 16px; background: #E4F2F0; border-radius: 6px; display: flex; justify-content: space-between; align-items: baseline; }
-          .grand-total .label { font-size: 13px; font-weight: 600; color: #0B5750; }
-          .grand-total .value { font-size: 22px; font-weight: 700; color: #0B5750; font-variant-numeric: tabular-nums; }
           footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #E6E4DF; text-align: center; font-size: 10px; color: #8B93A1; }
           @media print { body { padding: 0; } }
         </style>
@@ -91,10 +86,6 @@ export function ResultSheetButton({ data, row }: { data: ResultsData; row: Resul
             : ""
         }
 
-        <div class="grand-total">
-          <span class="label">Overall Total</span>
-          <span class="value">${row.grandTotal} / ${grandMax}</span>
-        </div>
 
         <footer>Built and managed by KMF Enterprise</footer>
       </body>

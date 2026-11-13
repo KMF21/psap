@@ -150,10 +150,6 @@ export default async function ExamDetailPage({ params }: { params: Promise<{ exa
                   <dd className="font-medium tabular text-ink">{exam.projectMaxTotal}</dd>
                 </div>
               )}
-              <div className="flex justify-between border-t border-border pt-2">
-                <dt className="font-medium text-ink">Grand total</dt>
-                <dd className="font-semibold tabular text-ink">{exam.practicalTargetTotal + exam.projectMaxTotal}</dd>
-              </div>
             </dl>
           </div>
 

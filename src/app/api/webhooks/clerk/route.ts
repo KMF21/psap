@@ -2,6 +2,7 @@ import { Webhook } from "svix";
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { ensureRoleFromInvitation } from "@/lib/clerk-invitations";
 
 // This route keeps Supabase's `users` table in sync with Clerk, since our
 // RLS policies (current_app_role, current_app_user_id in 001_init.sql) look
@@ -23,7 +24,7 @@ type ClerkUserEvent = {
     primary_email_address_id: string | null;
     first_name: string | null;
     last_name: string | null;
-    public_metadata: { role?: string };
+    public_metadata: { role?: string; fullName?: string };
     phone_numbers?: { phone_number: string }[];
   };
 };
@@ -74,20 +75,49 @@ export async function POST(req: Request) {
       email_addresses[0]?.email_address ??
       null;
 
-    const role = public_metadata?.role === "admin" ? "admin" : "csa"; // defaults new users to csa until Admin sets them explicitly
+    // Invited CSAs who signed up without the invitation link arrive with no
+    // role. Apply it from our invitation so the Admin never has to open the
+    // Clerk dashboard. (Clerk then fires user.updated, which lands here again
+    // with the role present — harmless.)
+    let metaRole = public_metadata?.role;
+    let inviteName = public_metadata?.fullName?.trim() || null;
+    if (!metaRole) {
+      try {
+        const ensured = await ensureRoleFromInvitation(id);
+        metaRole = ensured.role ?? undefined;
+        inviteName = inviteName ?? ensured.fullName;
+      } catch (e) {
+        console.error("Could not apply role from invitation:", e);
+      }
+    }
+    const role = metaRole === "admin" ? "admin" : "csa"; // Supabase row defaults to csa; app access still needs the Clerk role
 
-    const { error } = await supabaseAdmin.from("users").upsert(
-      {
-        clerk_user_id: id,
-        full_name: [first_name, last_name].filter(Boolean).join(" ") || primaryEmail || "Unnamed user",
-        role,
-        email: primaryEmail,
-        phone: phone_numbers?.[0]?.phone_number ?? null,
-        // is_active deliberately NOT set here: new rows default to true, and a
-        // later user.updated event must never re-activate a deactivated CSA.
-      },
-      { onConflict: "clerk_user_id" },
-    );
+    // Name priority: a real name already saved in our database (typed by the
+    // Admin) > the name typed on the invite > the name on the Clerk profile >
+    // the email as a last resort. A saved name is never replaced by an email.
+    const { data: existing } = await supabaseAdmin
+      .from("users")
+      .select("id, full_name")
+      .eq("clerk_user_id", id)
+      .maybeSingle();
+    const clerkName = [first_name, last_name].filter(Boolean).join(" ").trim() || null;
+    const looksLikePlaceholder = (n: string | null | undefined) =>
+      !n || n === "Unnamed user" || n.includes("@") || (primaryEmail !== null && n.toLowerCase() === primaryEmail.toLowerCase());
+    const savedName = existing && !looksLikePlaceholder(existing.full_name) ? existing.full_name : null;
+    const fullName = savedName ?? inviteName ?? clerkName ?? primaryEmail ?? "Unnamed user";
+
+    const row = {
+      clerk_user_id: id,
+      full_name: fullName,
+      role,
+      email: primaryEmail,
+      phone: phone_numbers?.[0]?.phone_number ?? null,
+      // is_active deliberately NOT set here: new rows default to true, and a
+      // later user.updated event must never re-activate a deactivated CSA.
+    };
+    const { error } = existing
+      ? await supabaseAdmin.from("users").update({ ...row, updated_at: new Date().toISOString() }).eq("id", existing.id)
+      : await supabaseAdmin.from("users").upsert(row, { onConflict: "clerk_user_id" });
 
     if (error) {
       console.error("Failed to sync Clerk user to Supabase:", error);

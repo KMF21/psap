@@ -239,8 +239,6 @@ export interface StudentHistoryExam {
   projectScores: number[];
   projectMax: number;
   projectTotal: number;
-  grandTotal: number;
-  grandMax: number;
 }
 
 export async function getStudentHistory(
@@ -322,8 +320,6 @@ export async function getStudentHistory(
       projectScores,
       projectMax: Number(e.project_max_total),
       projectTotal,
-      grandTotal: Math.round((practicalTotal + projectTotal) * 10) / 10,
-      grandMax: Number(e.practical_target_total) + Number(e.project_max_total),
     };
   });
 

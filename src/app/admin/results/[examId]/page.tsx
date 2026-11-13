@@ -55,7 +55,6 @@ export default async function ExamResultsPage({
   const visibleRows = needle
     ? data.rows.filter((r) => r.fullName.toLowerCase().includes(needle) || r.registrationNumber.toLowerCase().includes(needle))
     : data.rows;
-  const grandTotalMax = data.practicalTargetTotal + data.projectMaxTotal;
 
   return (
     <div>
@@ -102,10 +101,6 @@ export default async function ExamResultsPage({
                     <div className="font-normal text-ink-faint">/ {data.projectMaxTotal}</div>
                   </th>
                 )}
-                <th className="px-5 py-3 text-right font-medium">
-                  Total
-                  <div className="font-normal text-ink-faint">/ {grandTotalMax}</div>
-                </th>
                 <th className="w-10 px-3 py-3" />
               </tr>
             </thead>
@@ -152,7 +147,6 @@ export default async function ExamResultsPage({
                       )}
                     </td>
                   )}
-                  <td className="px-5 py-3.5 text-right font-semibold tabular text-ink">{row.grandTotal}</td>
                   <td className="px-3 py-3.5 text-center">
                     <ResultSheetButton data={data} row={row} />
                   </td>

@@ -4,9 +4,11 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getCsaAccounts } from "@/lib/supabase/csas";
 import { InviteCsaForm } from "./InviteCsaForm";
 import { CsaAccountsTable } from "./CsaAccountsTable";
+import { listPendingCsaInvitations, type CsaInvitationInfo } from "@/lib/clerk-invitations";
 
 export default async function CsaAccountsPage() {
   let csas: Awaited<ReturnType<typeof getCsaAccounts>>["csas"] = [];
+  let invitations: CsaInvitationInfo[] = [];
   let error: string | null = null;
 
   try {
@@ -14,6 +16,11 @@ export default async function CsaAccountsPage() {
     const result = await getCsaAccounts(supabase);
     csas = result.csas;
     error = result.error;
+    // Pending invites are a convenience view — never block the page on them.
+    invitations = await listPendingCsaInvitations().catch(() => []);
+    // Someone already signed up: hide their stale invite row.
+    const known = new Set(csas.map((c) => (c.email ?? "").toLowerCase()));
+    invitations = invitations.filter((i) => !known.has(i.email.toLowerCase()));
   } catch (e) {
     error = e instanceof Error ? e.message : "Unknown error connecting to the database.";
   }
@@ -23,7 +30,11 @@ export default async function CsaAccountsPage() {
       <PageHeader
         icon={UserCog}
         title="CSA accounts"
-        subtitle={error ? "Unable to load CSA accounts" : `${csas.length} CSA account${csas.length !== 1 ? "s" : ""}`}
+        subtitle={
+          error
+            ? "Unable to load CSA accounts"
+            : `${csas.length} CSA account${csas.length !== 1 ? "s" : ""}${invitations.length ? ` · ${invitations.length} invited` : ""}`
+        }
         breadcrumb={[{ label: "Dashboard", href: "/admin" }, { label: "CSA accounts" }]}
       />
 
@@ -46,13 +57,7 @@ export default async function CsaAccountsPage() {
             <div className="border-b border-border px-5 py-4">
               <h2 className="text-sm font-semibold text-ink">Existing accounts</h2>
             </div>
-            {csas.length === 0 ? (
-              <p className="px-5 py-8 text-center text-sm text-ink-faint">
-                No CSA accounts yet. Invite one using the form above.
-              </p>
-            ) : (
-              <CsaAccountsTable initialCsas={csas} />
-            )}
+            <CsaAccountsTable initialCsas={csas} initialInvitations={invitations} />
           </div>
         )}
       </div>

@@ -96,12 +96,6 @@ export default async function StudentHistoryPage({ params }: { params: Promise<{
                 )}
               </ul>
 
-              <div className="flex items-baseline justify-between gap-4 rounded-b-lg px-4 py-3.5 sm:px-5" style={{ background: "var(--accent-soft)" }}>
-                <span className="text-sm font-semibold" style={{ color: "var(--accent-ink)" }}>Total</span>
-                <span className="text-lg font-bold tabular" style={{ color: "var(--accent-ink)" }}>
-                  {e.grandTotal} <span className="text-sm font-medium opacity-75">/ {e.grandMax}</span>
-                </span>
-              </div>
             </section>
           ))}
           <p className="text-xs text-ink-faint">Only submitted or corrected scores are shown; drafts and unscored skills appear as “—”.</p>

@@ -16,7 +16,6 @@ export interface ResultsRow {
   practicalTotal: number;
   projectScores: number[]; // one per submitted project-assessing CSA
   projectTotal: number;
-  grandTotal: number;
 }
 
 export interface ResultsData {
@@ -142,7 +141,6 @@ export async function getResultsData(
       practicalTotal,
       projectScores,
       projectTotal,
-      grandTotal: Math.round((practicalTotal + projectTotal) * 10) / 10,
     };
   });
 
