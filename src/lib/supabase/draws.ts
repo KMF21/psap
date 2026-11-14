@@ -232,7 +232,7 @@ export async function getExamBoard(
         .from("students")
         .select("id, registration_number, full_name, level, exam_eligibility!inner(exam_id)")
         .eq("exam_eligibility.exam_id", examId)
-        .order("full_name", { ascending: true })
+        .order("registration_number", { ascending: true })
         .order("id", { ascending: true })
         .range(from, to),
     ),

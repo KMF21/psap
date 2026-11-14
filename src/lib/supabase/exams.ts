@@ -572,7 +572,7 @@ export async function getStudentsWithEligibility(
     supabase
       .from("students")
       .select("id, registration_number, full_name, level")
-      .order("full_name", { ascending: true })
+      .order("registration_number", { ascending: true })
       .order("id", { ascending: true })
       .range(from, to),
   );

@@ -26,7 +26,7 @@ export async function getStudents(supabase: SupabaseClient): Promise<{ students:
   const { data, error } = await supabase
     .from("students")
     .select("id, registration_number, full_name, level, photo_url")
-    .order("full_name", { ascending: true });
+    .order("registration_number", { ascending: true });
 
   if (error) {
     return { students: [], error: error.message };
@@ -184,7 +184,7 @@ export async function getStudentList(supabase: SupabaseClient, query: StudentLis
   if (q) builder = builder.or(`full_name.ilike.%${q}%,registration_number.ilike.%${q}%`);
 
   const { data, count, error } = await builder
-    .order("full_name", { ascending: true })
+    .order("registration_number", { ascending: true })
     .order("id", { ascending: true })
     .range(from, from + STUDENTS_PAGE_SIZE - 1);
   if (error) return { ...empty, error: error.message };

@@ -23,10 +23,9 @@ function buildHeaders(data: ResultsData): string[] {
     headers.push(`Draw ${i} Skill`, `Draw ${i} Score${data.drawnMarks !== null ? ` (/${data.drawnMarks})` : ""}`);
   }
   headers.push(`Practical Total (/${data.practicalTargetTotal})`);
-  if (data.hasProject) {
-    for (const c of data.components) headers.push(`${c.name} (/${c.maxMarks})`);
-    headers.push(`Project Total (/${data.projectMaxTotal})`);
-  }
+  // Client request: exports show only the combined project score, not the
+  // chapter breakdown (which stays visible on screen for corrections).
+  if (data.hasProject) headers.push(`Project Total (/${data.projectMaxTotal})`);
   return headers;
 }
 
@@ -39,7 +38,6 @@ function buildRows(data: ResultsData): (string | number)[][] {
     });
     cells.push(row.practicalTotal);
     if (data.hasProject) {
-      row.componentScores.forEach((v) => cells.push(v ?? ""));
       cells.push(row.projectStatus === "submitted" || row.projectStatus === "amended" ? row.projectTotal : "");
     }
     return cells;

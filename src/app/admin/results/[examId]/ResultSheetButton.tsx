@@ -25,12 +25,6 @@ export function ResultSheetButton({ data, row }: { data: ResultsData; row: Resul
     ].join("");
 
     const projectScored = row.projectStatus === "submitted" || row.projectStatus === "amended";
-    const projectRowsHtml = data.components
-      .map((c, i) => {
-        const v = row.componentScores[i];
-        return `<tr><td>${escapeHtml(c.name)}</td><td class="num">${v === null ? "—" : escapeHtml(v)}</td><td class="num">${c.maxMarks}</td></tr>`;
-      })
-      .join("");
 
     win.document.write(`
       <!DOCTYPE html>
@@ -83,10 +77,9 @@ export function ResultSheetButton({ data, row }: { data: ResultsData; row: Resul
             ? `
         <h2>Project Assessment</h2>
         <table>
-          <thead><tr><th>Chapter</th><th>Score</th><th>Max</th></tr></thead>
+          <thead><tr><th>Component</th><th>Score</th><th>Max</th></tr></thead>
           <tbody>
-            ${projectScored ? projectRowsHtml : `<tr><td colspan="3" class="muted">Not yet scored</td></tr>`}
-            <tr class="total"><td>Total Project</td><td class="num">${projectScored ? row.projectTotal : "—"}</td><td class="num">${data.projectMaxTotal}</td></tr>
+            <tr class="total"><td>Total Project</td><td class="num">${projectScored ? row.projectTotal : "Not yet scored"}</td><td class="num">${data.projectMaxTotal}</td></tr>
           </tbody>
         </table>`
             : ""

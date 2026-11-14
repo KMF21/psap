@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, Pencil, X } from "lucide-react";
+import { Check, Pencil, Trash2, X } from "lucide-react";
 import type { CsaAccount } from "@/lib/supabase/csas";
 import type { CsaInvitationInfo } from "@/lib/clerk-invitations";
-import { renameCsaAction, revokeCsaInvitationAction, toggleCsaActiveAction } from "./actions";
+import { deleteCsaAction, renameCsaAction, revokeCsaInvitationAction, toggleCsaActiveAction } from "./actions";
 
 function Pill({ tone, children }: { tone: "success" | "neutral" | "warn"; children: React.ReactNode }) {
   const style =
@@ -133,6 +133,16 @@ export function CsaAccountsTable({
     });
   }
 
+  function remove(csa: CsaAccount) {
+    if (!window.confirm(`Permanently delete ${csa.fullName}'s account?\n\nThis removes their sign-in. Only accounts that have never scored anyone can be deleted.`)) return;
+    setError(null);
+    startTransition(async () => {
+      const result = await deleteCsaAction(csa.id);
+      if (result.error) setError(result.error);
+      else setCsas((prev) => prev.filter((c) => c.id !== csa.id));
+    });
+  }
+
   function rename(id: string, fullName: string) {
     setCsas((prev) => prev.map((c) => (c.id === id ? { ...c, fullName } : c)));
   }
@@ -172,9 +182,14 @@ export function CsaAccountsTable({
               <p className="truncate text-xs text-ink-muted">{c.email ?? "—"}</p>
               <div className="mt-1.5"><Pill tone={c.isActive ? "success" : "neutral"}>{c.isActive ? "Active" : "Inactive"}</Pill></div>
             </div>
-            <button onClick={() => toggle(c)} disabled={isPending} className="shrink-0 py-1 text-xs font-medium text-ink-muted disabled:opacity-50">
-              {c.isActive ? "Deactivate" : "Reactivate"}
-            </button>
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <button onClick={() => toggle(c)} disabled={isPending} className="py-1 text-xs font-medium text-ink-muted disabled:opacity-50">
+                {c.isActive ? "Deactivate" : "Reactivate"}
+              </button>
+              <button onClick={() => remove(c)} disabled={isPending} className="flex items-center gap-1 py-1 text-xs font-medium text-ink-muted hover:text-danger disabled:opacity-50">
+                <Trash2 size={12} /> Delete
+              </button>
+            </div>
           </li>
         ))}
       </ul>
@@ -208,9 +223,17 @@ export function CsaAccountsTable({
                 <td className="max-w-[18rem] px-5 py-3.5"><NameCell csa={c} onSaved={(n) => rename(c.id, n)} /></td>
                 <td className="px-5 py-3.5 text-ink-muted">{c.email ?? "—"}</td>
                 <td className="px-5 py-3.5"><Pill tone={c.isActive ? "success" : "neutral"}>{c.isActive ? "Active" : "Inactive"}</Pill></td>
-                <td className="px-5 py-3.5 text-right">
+                <td className="whitespace-nowrap px-5 py-3.5 text-right">
                   <button onClick={() => toggle(c)} disabled={isPending} className="text-xs font-medium text-ink-muted hover:text-accent-ink disabled:opacity-50">
                     {c.isActive ? "Deactivate" : "Reactivate"}
+                  </button>
+                  <button
+                    onClick={() => remove(c)}
+                    disabled={isPending}
+                    className="ml-3 inline-flex items-center gap-1 text-xs font-medium text-ink-muted hover:text-danger disabled:opacity-50"
+                    aria-label={`Delete ${c.fullName}`}
+                  >
+                    <Trash2 size={12} /> Delete
                   </button>
                 </td>
               </tr>

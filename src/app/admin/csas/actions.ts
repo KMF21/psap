@@ -4,7 +4,7 @@ import { clerkClient } from "@clerk/nextjs/server";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { setCsaActive, renameCsa } from "@/lib/supabase/csas";
+import { setCsaActive, renameCsa, getCsaDeletionCheck, deleteCsaRow } from "@/lib/supabase/csas";
 import { getSessionRole, isAdminSession } from "@/lib/auth";
 
 export interface InviteCsaState {
@@ -118,5 +118,32 @@ export async function toggleCsaActiveAction(csaUserId: string, isActive: boolean
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Unknown error connecting to the database." };
   }
+  return { error: null };
+}
+
+export async function deleteCsaAction(csaUserId: string): Promise<{ error: string | null }> {
+  if (!(await isAdminSession())) return { error: "Only an Admin can delete CSA accounts." };
+  try {
+    const supabase = await createServerSupabaseClient();
+    const check = await getCsaDeletionCheck(supabase, csaUserId);
+    if (check.error) return { error: check.error };
+
+    // Remove the sign-in first (real Clerk ids start with "user_"), so a
+    // deleted CSA can never log back in. Placeholder rows have no login.
+    if (check.clerkUserId?.startsWith("user_")) {
+      const client = await clerkClient();
+      try {
+        await client.users.deleteUser(check.clerkUserId);
+      } catch (e) {
+        const status = (e as { status?: number }).status;
+        if (status !== 404) return { error: e instanceof Error ? e.message : "Could not remove the sign-in account in Clerk." };
+      }
+    }
+    const { error } = await deleteCsaRow(supabase, csaUserId);
+    if (error) return { error };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Unknown error connecting to the database." };
+  }
+  revalidatePath("/admin/csas");
   return { error: null };
 }
